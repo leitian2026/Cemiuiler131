@@ -7,6 +7,12 @@
             android:key="prefs_key_system_ui_statusbar_clock_bold"
             android:title="@string/system_ui_statusbar_indicator_bold" />
 
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="prefs_key_system_ui_statusbar_clock_tabular_digits"
+            android:summary="@string/system_ui_statusbar_clock_tabular_digits_desc"
+            android:title="@string/system_ui_statusbar_clock_tabular_digits" />
+
         <DropDownPreference
             android:defaultValue="0"
             android:key="prefs_key_system_ui_statusbar_clock_mode"
