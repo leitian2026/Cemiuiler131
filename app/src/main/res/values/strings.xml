@@ -82,6 +82,10 @@
     <string name="disable_detailed_log">Disable detailed log</string>
     <string name="disable_detailed_log_desc">Reboot to apply</string>
     <string name="settings_safe_mode">Safe mode</string>
+    <string name="settings_hook_status" translatable="false">功能检查</string>
+    <string name="system_ui_statusbar_clock_tabular_digits" translatable="false">数字等宽</string>
+    <string name="system_ui_statusbar_clock_tabular_digits_desc" translatable="false">时间里的数字占相同宽度，防止秒数变化时旁边的日期抖动（仅预设模式 / 极客模式）</string>
+    <string name="settings_hook_status_desc" translatable="false">查看哪些功能没有装上，以及配置读取是否正常</string>
     <string name="settings_safe_mode_desc">Stop module function</string>
     <string name="about_developer_title">Developer</string>
     <string name="about_translator_title">Translator</string>
