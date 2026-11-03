@@ -2,8 +2,9 @@ package com.sevtinge.cemiuiler.module.hook.systemui.statusbar.clock
 
 import android.annotation.SuppressLint
 import android.content.Context
-import android.os.Handler
 import android.provider.Settings
+import android.text.SpannableString
+import android.text.Spanned
 import android.util.TypedValue
 import android.widget.TextView
 import com.github.kyuubiran.ezxhelper.ClassUtils.loadClass
@@ -19,8 +20,6 @@ import java.lang.reflect.Method
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
-import java.util.Timer
-import java.util.TimerTask
 
 object TimeCustomization : BaseHook() {
     // 预设模式
@@ -36,6 +35,7 @@ object TimeCustomization : BaseHook() {
     private val isSecond = mPrefsMap.getBoolean("system_ui_statusbar_clock_second")
     private val isDoubleHour = mPrefsMap.getBoolean("system_ui_statusbar_clock_hour_cn")
     private val isPeriod = mPrefsMap.getBoolean("system_ui_statusbar_clock_period")
+    private val tabularDigits = mPrefsMap.getBoolean("system_ui_statusbar_clock_tabular_digits")
 
     // 极客模式
     private val getGeekClockSize = mPrefsMap.getInt("system_ui_statusbar_clock_size_geek", 0)
@@ -78,20 +78,11 @@ object TimeCustomization : BaseHook() {
                                     textV.setTextSize(TypedValue.COMPLEX_UNIT_DIP, clockSize)
                                 }
                             }
-                            val d: Method = textV.javaClass.getDeclaredMethod("updateTime")
-                            val r = Runnable {
-                                d.isAccessible = true
-                                d.invoke(textV)
+                            // 只有显示秒时才需要每秒刷新；统一节拍器：息屏停止、不可见不刷新
+                            if (isSecond) {
+                                val d: Method = textV.javaClass.getDeclaredMethod("updateTime")
+                                SecondClockTicker.add(textV, d)
                             }
-
-                            class T : TimerTask() {
-                                override fun run() {
-                                    Handler(textV.context.mainLooper).post(r)
-                                }
-                            }
-                            Timer().scheduleAtFixedRate(
-                                T(), 1000 - System.currentTimeMillis() % 1000, 1000
-                            )
                         } catch (_: Exception) {
                         }
                     }
@@ -109,7 +100,7 @@ object TimeCustomization : BaseHook() {
                                 )
                                 val is24 = t == "24"
                                 nowTime = Calendar.getInstance().time
-                                textV.text = getDate(c!!) + str + getTime(c!!, is24)
+                                textV.text = tabularText(getDate(c!!) + str + getTime(c!!, is24))
                             }
                         } catch (_: Exception) {
                         }
@@ -135,20 +126,11 @@ object TimeCustomization : BaseHook() {
                                 textV.setTextSize(TypedValue.COMPLEX_UNIT_DIP, clockSize)
                             }
 
-                            val d: Method = textV.javaClass.getDeclaredMethod("updateTime")
-                            val r = Runnable {
-                                d.isAccessible = true
-                                d.invoke(textV)
+                            // 格式里带秒才需要每秒刷新
+                            if (getGeekFormat.toString().contains("s")) {
+                                val d: Method = textV.javaClass.getDeclaredMethod("updateTime")
+                                SecondClockTicker.add(textV, d)
                             }
-
-                            class T : TimerTask() {
-                                override fun run() {
-                                    Handler(textV.context.mainLooper).post(r)
-                                }
-                            }
-                            Timer().scheduleAtFixedRate(
-                                T(), 1000 - System.currentTimeMillis() % 1000, 1000
-                            )
                         } catch (_: Exception) {
                         }
                     }
@@ -169,7 +151,7 @@ object TimeCustomization : BaseHook() {
                                 val textSb = StringBuilder()
                                 val formatSb = StringBuilder(getGeekFormat.toString())
                                 mCalendar?.callMethod("format", c, textSb, formatSb)
-                                textV.text = textSb.toString()
+                                textV.text = tabularText(textSb.toString())
                                 it.result = null
                             }
                         } catch (_: Exception) {
@@ -178,6 +160,18 @@ object TimeCustomization : BaseHook() {
                 }
             }
         }
+    }
+
+    // 让每个数字占相同宽度，避免秒数变化时旁边的日期左右抖动
+    private fun tabularText(text: String): CharSequence {
+        if (!tabularDigits) return text
+        val spannable = SpannableString(text)
+        for (i in text.indices) {
+            if (text[i] in '0'..'9') {
+                spannable.setSpan(TabularDigitSpan(), i, i + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
+        }
+        return spannable
     }
 
     @SuppressLint("SimpleDateFormat")
