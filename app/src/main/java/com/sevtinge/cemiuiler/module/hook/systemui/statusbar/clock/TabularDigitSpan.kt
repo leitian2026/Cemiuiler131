@@ -12,12 +12,35 @@ import kotlin.math.max
  */
 class TabularDigitSpan : ReplacementSpan() {
 
+    private class WidthCache(
+        val textSize: Float,
+        val typeface: Any?,
+        val fakeBold: Boolean,
+        val letterSpacing: Float,
+        val width: Int
+    )
+
+    // 单项缓存：同一个字号 / 字体下最宽数字的宽度不变，避免每个数字每次测量 / 绘制都量 10 个字形
+    @Volatile
+    private var cache: WidthCache? = null
+
     private fun cellWidth(paint: Paint): Int {
+        val cached = cache
+        if (cached != null
+            && cached.textSize == paint.textSize
+            && cached.typeface === paint.typeface
+            && cached.fakeBold == paint.isFakeBoldText
+            && cached.letterSpacing == paint.letterSpacing
+        ) {
+            return cached.width
+        }
         var widest = 0f
         for (c in '0'..'9') {
             widest = max(widest, paint.measureText(c.toString()))
         }
-        return ceil(widest.toDouble()).toInt()
+        val width = ceil(widest.toDouble()).toInt()
+        cache = WidthCache(paint.textSize, paint.typeface, paint.isFakeBoldText, paint.letterSpacing, width)
+        return width
     }
 
     override fun getSize(
