@@ -23,6 +23,34 @@ public class ScreenSwipe extends BaseHook {
     Class<?> mLauncher;
     Class<?> mWorkspace;
 
+    // 下面这些桌面方法在手势、布局过程中会被频繁调用，原来每次都向模块的 Provider 做一次跨进程查询。
+    // 这里加一个短时缓存；设置变化时由 SharedPrefsObserver 主动失效，所以不会读到旧值。
+    private static final long INT_CACHE_TTL_MS = 5000;
+
+    private static final class CachedInt {
+        final int value;
+        final long time;
+
+        CachedInt(int value, long time) {
+            this.value = value;
+            this.time = time;
+        }
+    }
+
+    private static final java.util.concurrent.ConcurrentHashMap<String, CachedInt> sIntCache =
+        new java.util.concurrent.ConcurrentHashMap<>();
+
+    private static int getIntPref(Context context, String key, int def) {
+        long now = android.os.SystemClock.uptimeMillis();
+        // 同一个 key 在不同调用处的默认值可能不同，缓存键必须带上默认值
+        String cacheKey = key + "|" + def;
+        CachedInt cached = sIntCache.get(cacheKey);
+        if (cached != null && now - cached.time < INT_CACHE_TTL_MS) return cached.value;
+        int value = PrefsUtils.getSharedIntPrefs(context, key, def);
+        sIntCache.put(cacheKey, new CachedInt(value, now));
+        return value;
+    }
+
     @Override
     public void init() {
         mLauncher = findClassIfExists("com.miui.home.launcher.Launcher");
@@ -61,6 +89,12 @@ public class ScreenSwipe extends BaseHook {
                     @Override
                     public void onChange(Uri uri) {
                         try {
+                            final String changedKey = uri.getPathSegments().get(2);
+                            final String prefix = changedKey + "|";
+                            sIntCache.keySet().removeIf(k -> k.startsWith(prefix));
+                        } catch (Throwable ignored) {
+                        }
+                        try {
                             String type = uri.getPathSegments().get(1);
                             String key = uri.getPathSegments().get(2);
                             if (key.contains("prefs_key_home_gesture_down_swipe"))
@@ -91,7 +125,7 @@ public class ScreenSwipe extends BaseHook {
         findAndHookMethodSilently("com.miui.home.launcher.allapps.LauncherMode", "getPullDownGesture", Context.class, new MethodHook() {
             @Override
             protected void after(final MethodHookParam param) {
-                if (PrefsUtils.getSharedIntPrefs((Context) param.args[0], "prefs_key_home_gesture_down_swipe_action", 1) > 1)
+                if (getIntPref((Context) param.args[0], "prefs_key_home_gesture_down_swipe_action", 1) > 1)
                     param.setResult("no_action");
             }
         });
@@ -100,7 +134,7 @@ public class ScreenSwipe extends BaseHook {
         findAndHookMethodSilently("com.miui.home.launcher.allapps.LauncherMode", "getSlideUpGesture", Context.class, new MethodHook() {
             @Override
             protected void before(final MethodHookParam param) {
-                if (PrefsUtils.getSharedIntPrefs((Context) param.args[0], "prefs_key_home_gesture_up_swipe_action", 0) > 0)
+                if (getIntPref((Context) param.args[0], "prefs_key_home_gesture_up_swipe_action", 0) > 0)
                     param.setResult("no_action");
             }
         });
@@ -108,7 +142,7 @@ public class ScreenSwipe extends BaseHook {
         if (findAndHookMethodSilently("com.miui.home.launcher.DeviceConfig", "isGlobalSearchEnable", Context.class, new MethodHook() {
             @Override
             protected void before(final MethodHookParam param) {
-                if (PrefsUtils.getSharedIntPrefs((Context) param.args[0], "prefs_key_home_gesture_up_swipe_action", 0) > 0)
+                if (getIntPref((Context) param.args[0], "prefs_key_home_gesture_up_swipe_action", 0) > 0)
                     param.setResult(false);
             }
         })) {
@@ -116,7 +150,7 @@ public class ScreenSwipe extends BaseHook {
                 @Override
                 protected void before(final MethodHookParam param) {
                     View view = (View) param.thisObject;
-                    if (PrefsUtils.getSharedIntPrefs(view.getContext(), "prefs_key_home_gesture_down_swipe_action", 0) > 0)
+                    if (getIntPref(view.getContext(), "prefs_key_home_gesture_down_swipe_action", 0) > 0)
                         param.setResult(false);
                 }
             });
@@ -125,7 +159,7 @@ public class ScreenSwipe extends BaseHook {
                 @Override
                 protected void before(final MethodHookParam param) {
                     View view = (View) param.thisObject;
-                    if (PrefsUtils.getSharedIntPrefs(view.getContext(), "prefs_key_home_gesture_up_swipe_action", 0) > 0)
+                    if (getIntPref(view.getContext(), "prefs_key_home_gesture_up_swipe_action", 0) > 0)
                         param.setResult(false);
                 }
             });
@@ -133,14 +167,14 @@ public class ScreenSwipe extends BaseHook {
             findAndHookMethodSilently("com.miui.home.launcher.DeviceConfig", "isGlobalSearchBottomEffectEnable", Context.class, new MethodHook() {
                 @Override
                 protected void before(final MethodHookParam param) {
-                    if (PrefsUtils.getSharedIntPrefs((Context) param.args[0], "prefs_key_home_gesture_up_swipe_action", 0) > 0)
+                    if (getIntPref((Context) param.args[0], "prefs_key_home_gesture_up_swipe_action", 0) > 0)
                         param.setResult(false);
                 }
             });
         } else if (!findAndHookMethodSilently("com.miui.home.launcher.DeviceConfig", "allowedSlidingUpToStartGolbalSearch", Context.class, new MethodHook() {
             @Override
             protected void before(final MethodHookParam param) {
-                if (PrefsUtils.getSharedIntPrefs((Context) param.args[0], "prefs_key_home_gesture_up_swipe_action", 0) > 0)
+                if (getIntPref((Context) param.args[0], "prefs_key_home_gesture_up_swipe_action", 0) > 0)
                     param.setResult(false);
             }
         })) if (lpparam.packageName.equals("com.miui.home"))
