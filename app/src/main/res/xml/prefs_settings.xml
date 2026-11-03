@@ -61,6 +61,11 @@
             android:summary="@string/settings_safe_mode_desc"
             android:title="@string/settings_safe_mode" />
 
+        <Preference
+            android:key="prefs_key_hook_status"
+            android:summary="@string/settings_hook_status_desc"
+            android:title="@string/settings_hook_status" />
+
     </PreferenceCategory>
 
     <!--<PreferenceCategory>
