@@ -12,10 +12,15 @@ import com.sevtinge.cemiuiler.XposedInit;
 import com.sevtinge.cemiuiler.provider.SharedPrefsProvider;
 import com.sevtinge.cemiuiler.utils.log.XposedLogUtils;
 
+import org.json.JSONArray;
+
 import java.io.File;
 import java.lang.reflect.Field;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import de.robv.android.xposed.XposedBridge;
 
@@ -29,6 +34,107 @@ public class PrefsUtils {
     public static String mPrefsPath = "/data/user_de/0/" + Helpers.mAppModulePkg + "/shared_prefs";
     public static String mPrefsFile = mPrefsPath + "/" + mPrefsName + ".xml";
 
+
+    /**
+     * 模块端调用：让配置文件对其他进程可读（供 zygote 阶段读取快照）。
+     * 不依赖 New XSharedPreferences，失败时静默忽略。
+     */
+    public static void makePrefsReadable(Context context) {
+        try {
+            Context protectedContext = Helpers.getProtectedContext(context);
+            File dataDir = protectedContext.getDataDir();
+            File prefsDir = new File(dataDir, "shared_prefs");
+            File prefsFile = new File(prefsDir, mPrefsName + ".xml");
+            dataDir.setExecutable(true, false);
+            prefsDir.setExecutable(true, false);
+            prefsDir.setReadable(true, false);
+            if (prefsFile.exists()) prefsFile.setReadable(true, false);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 获取系统 Context（ActivityThread.getSystemContext），用于在被 hook 进程中访问模块的 ContentProvider。
+     */
+    public static Context getSystemContext() {
+        try {
+            Class<?> activityThread = Class.forName("android.app.ActivityThread");
+            Object thread = activityThread.getMethod("currentActivityThread").invoke(null);
+            return (Context) activityThread.getMethod("getSystemContext").invoke(thread);
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    /**
+     * 通过模块的 SharedPrefsProvider 一次性读取全部配置并写入 mPrefsMap。
+     *
+     * @return 是否成功读取到配置
+     */
+    public static boolean loadAllFromProvider(Context context) {
+        if (context == null) return false;
+        Cursor cursor = null;
+        try {
+            Uri uri = Uri.parse("content://" + SharedPrefsProvider.AUTHORITY + "/all");
+            cursor = context.getContentResolver().query(uri, null, null, null, null);
+            if (cursor == null) return false;
+
+            Map<String, Object> loaded = new HashMap<>();
+            while (cursor.moveToNext()) {
+                String key = cursor.getString(0);
+                String type = cursor.getString(1);
+                String value = cursor.getString(2);
+                if (key == null || type == null || value == null) continue;
+                switch (type) {
+                    case "boolean" -> loaded.put(key, "1".equals(value));
+                    case "int" -> loaded.put(key, Integer.parseInt(value));
+                    case "long" -> loaded.put(key, Long.parseLong(value));
+                    case "float" -> loaded.put(key, Float.parseFloat(value));
+                    case "string" -> loaded.put(key, value);
+                    case "stringset" -> {
+                        JSONArray array = new JSONArray(value);
+                        Set<String> set = new LinkedHashSet<>();
+                        for (int i = 0; i < array.length(); i++) set.add(array.getString(i));
+                        loaded.put(key, set);
+                    }
+                }
+            }
+            if (loaded.isEmpty()) return false;
+            XposedInit.mPrefsMap.putAll(loaded);
+            return true;
+        } catch (Throwable t) {
+            return false;
+        } finally {
+            if (cursor != null) cursor.close();
+        }
+    }
+
+    private static final AtomicBoolean sPrefsLoaderStarted = new AtomicBoolean(false);
+
+    /**
+     * 被 hook 进程启动时配置快照没读到，就通过模块 Provider 兜底读取。
+     * system_server 启动早期 Provider 不可用，放到后台线程里重试，避免阻塞系统启动。
+     */
+    public static void ensurePrefsLoaded(String packageName) {
+        if (!XposedInit.mPrefsMap.isEmpty()) return;
+        if ("android".equals(packageName)) {
+            if (!sPrefsLoaderStarted.compareAndSet(false, true)) return;
+            Thread loader = new Thread(() -> {
+                for (int i = 0; i < 30 && XposedInit.mPrefsMap.isEmpty(); i++) {
+                    try {
+                        Thread.sleep(5000);
+                    } catch (InterruptedException e) {
+                        return;
+                    }
+                    loadAllFromProvider(getSystemContext());
+                }
+            }, "Cemiuiler-PrefsLoader");
+            loader.setDaemon(true);
+            loader.start();
+        } else {
+            loadAllFromProvider(getSystemContext());
+        }
+    }
 
     public static SharedPreferences getSharedPrefs(Context context, boolean multiProcess) {
         context = Helpers.getProtectedContext(context);
