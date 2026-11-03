@@ -11,6 +11,7 @@ import com.sevtinge.cemiuiler.ui.fragment.base.SettingsPreferenceFragment;
 import com.sevtinge.cemiuiler.utils.BackupUtils;
 import com.sevtinge.cemiuiler.utils.DialogHelper;
 import com.sevtinge.cemiuiler.utils.PrefsUtils;
+import com.sevtinge.cemiuiler.utils.log.HookStatusReport;
 
 import moralnorm.appcompat.app.AppCompatActivity;
 import moralnorm.preference.DropDownPreference;
@@ -91,6 +92,11 @@ public class ModuleSettingsFragment extends SettingsPreferenceFragment
 
         findPreference("prefs_key_rest").setOnPreferenceClickListener(preference -> {
             restoreSettings(getActivity());
+            return true;
+        });
+
+        findPreference("prefs_key_hook_status").setOnPreferenceClickListener(preference -> {
+            DialogHelper.showDialog(getActivity(), "功能检查", HookStatusReport.build(getContext()));
             return true;
         });
 
