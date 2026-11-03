@@ -11,6 +11,8 @@ import de.robv.android.xposed.XposedHelpers;
 public class VolumeDefaultStream extends BaseHook {
 
     Class<?> mAudioService;
+    // getActiveStreamType 是高频调用，监听只需要注册一次
+    private volatile boolean mObserverRegistered = false;
 
     @Override
     public void init() {
@@ -20,14 +22,21 @@ public class VolumeDefaultStream extends BaseHook {
             @Override
             protected void before(MethodHookParam param) {
 
-                Context mContext = (Context) XposedHelpers.getObjectField(param.thisObject, "mContext");
-                Handler mHandler = new Handler(mContext.getMainLooper());
-                new PrefsUtils.SharedPrefsObserver(mContext, mHandler, "prefs_key_system_framework_default_volume_stream", "0") {
-                    @Override
-                    public void onChange(String name, String defValue) {
-                        mPrefsMap.put(name, PrefsUtils.getSharedStringPrefs(mContext, name, defValue));
+                if (!mObserverRegistered) {
+                    try {
+                        Context mContext = (Context) XposedHelpers.getObjectField(param.thisObject, "mContext");
+                        Handler mHandler = new Handler(mContext.getMainLooper());
+                        new PrefsUtils.SharedPrefsObserver(mContext, mHandler, "prefs_key_system_framework_default_volume_stream", "0") {
+                            @Override
+                            public void onChange(String name, String defValue) {
+                                mPrefsMap.put(name, PrefsUtils.getSharedStringPrefs(mContext, name, defValue));
+                            }
+                        };
+                        mObserverRegistered = true;
+                    } catch (Throwable ignored) {
+                        // 下次调用再试
                     }
-                };
+                }
 
                 int mDefaultVolumeStream = mPrefsMap.getStringAsInt("system_framework_default_volume_stream", 0);
 
