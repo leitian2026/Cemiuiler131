@@ -1,18 +1,7 @@
 name: Android U Action
 
 on:
-  push:
-    branches: [ "Android-U" ]
-  pull_request:
-    branches: [ "Android-U" ]
-    paths-ignore:
-      - ".github/**"
-      - "!.github/workflows/**"
-      - ".idea/"
-      - "doc/*"
-      - "*.md"
-      - ".github/workflows/crowdin.yml"
-      - "crowdin.yml"
+  # 已停用自动构建：仅手动触发（Actions → Run workflow）
   workflow_dispatch:
 
 jobs:
