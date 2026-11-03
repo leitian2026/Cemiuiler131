@@ -68,44 +68,7 @@ public class BigFolderIconBlur2x1 extends BaseHook {
                     lp1.width = mFolderWidth;
                     lp1.height = mFolderHeight;
                 }
-                findAndHookMethod(mLauncher, "showEditPanel", boolean.class, new MethodHook() {
-                    @Override
-                    protected void after(MethodHookParam param) throws Throwable {
-                        isShowEditPanel = (boolean) param.args[0];
-                        if (isShowEditPanel) {
-                            mDockBlur.setVisibility(View.GONE);
-                            mIconImageView.setVisibility(View.VISIBLE);
-                        } else {
-                            mDockBlur.setVisibility(View.VISIBLE);
-                            mIconImageView.setVisibility(View.GONE);
-                        }
-                    }
-                });
-
-                findAndHookMethod(mLauncher, "openFolder", mFolderInfo, View.class, new MethodHook() {
-                    @Override
-                    protected void after(MethodHookParam param) throws Throwable {
-                        mDockBlur.setVisibility(View.GONE);
-                    }
-                });
-
-                findAndHookMethod(mLauncher, "closeFolder", boolean.class, new MethodHook() {
-                    @Override
-                    protected void after(MethodHookParam param) throws Throwable {
-                        if (!isShowEditPanel) mDockBlur.setVisibility(View.VISIBLE);
-                    }
-                });
-
-                findAndHookMethod(mLauncher, "onStateSetStart", mLauncherState, new MethodHook() {
-                    @Override
-                    protected void after(MethodHookParam param) throws Throwable {
-                        if (param.args[0].getClass().getSimpleName().equals("LauncherState")) {
-                            mDockBlur.setVisibility(View.VISIBLE);
-                        } else {
-                            mDockBlur.setVisibility(View.GONE);
-                        }
-                    }
-                });
+                FolderBlurLauncherHooks.register(mDockBlur, mIconImageView, mLauncher, mFolderInfo, mLauncherState);
             }
         };
 
