@@ -22,12 +22,26 @@ public class CorePatchPrefs {
         return value instanceof Boolean ? (Boolean) value : defValue;
     }
 
+    // reload() 会被 ReturnConstant 在每次被 hook 的方法调用时执行（包括 MessageDigest.isEqual 这类
+    // system_server 里很常用的方法）。原来每次都重新解析整个配置 XML，开销很大，
+    // 现在限制最多每 5 秒检查一次，并且只有文件的修改时间变了才重新读取。
+    private static final long MIN_RELOAD_INTERVAL_MS = 5000;
+    private volatile long mLastCheckTime = 0;
+    private volatile long mLastModified = -1;
+
     public void reload() {
+        long now = android.os.SystemClock.uptimeMillis();
+        if (now - mLastCheckTime < MIN_RELOAD_INTERVAL_MS) return;
+        mLastCheckTime = now;
         try {
-            XSharedPreferences xsp = new XSharedPreferences(new File(PrefsUtils.mPrefsFile));
+            File file = new File(PrefsUtils.mPrefsFile);
+            long modified = file.lastModified();
+            if (modified == 0 || modified == mLastModified) return;
+            XSharedPreferences xsp = new XSharedPreferences(file);
             Map<String, ?> all = xsp.getAll();
             if (all != null && !all.isEmpty()) {
                 mPrefsMap.putAll(all);
+                mLastModified = modified;
             }
         } catch (Throwable ignored) {
             // 无权限读取时沿用 zygote 阶段的快照
