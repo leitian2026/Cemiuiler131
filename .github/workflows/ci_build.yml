@@ -78,7 +78,7 @@ jobs:
         run: |
           APK_FILE=$(find app/build/outputs/apk/release -name '*.apk')
           echo "APK_FILE=$APK_FILE" >> $GITHUB_ENV
-          echo "APK_FILE_NAME=$(basename "$APK_FILE" .apk)" >> $GITHUB_ENV
+          echo "APK_FILE_NAME=$(basename $APK_FILE .apk)" >> $GITHUB_ENV
 
       - name: Show APKs SHA256
         if: success()
@@ -86,8 +86,8 @@ jobs:
           echo "### Build Success" >> $GITHUB_STEP_SUMMARY
           echo "|Artifact|SHA256|" >> $GITHUB_STEP_SUMMARY
           echo "|:---:|:---|" >> $GITHUB_STEP_SUMMARY
-          APK_SHA256=$(sha256sum "$APK_FILE" | cut -d' ' -f1)
-          echo "|Release|$APK_SHA256|" >> $GITHUB_STEP_SUMMARY
+          APK_SHA256=($(sha256sum ${{ env.APK_FILE }}))
+          echo "|Release|$APK_SHA256" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload APKs
         uses: actions/upload-artifact@v4
