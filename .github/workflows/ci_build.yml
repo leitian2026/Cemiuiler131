@@ -1,0 +1,97 @@
+name: CI Build
+
+on:
+  # 仅手动触发：Actions → CI Build → Run workflow
+  workflow_dispatch:
+
+jobs:
+  build_app:
+    runs-on: ubuntu-latest
+    name: Build App
+    steps:
+      - name: Checkout Git Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: true
+
+      # 工程使用 Gradle 8.3 + Java 19 语法，需要 JDK 19 或 20（更高版本的 JDK 跑不动 Gradle 8.3）
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: '20'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-overwrite-existing: true
+
+      - name: Check Signing Secrets
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          ALIAS: ${{ secrets.ALIAS }}
+        run: |
+          if [ -z "$SIGNING_KEY" ] || [ -z "$KEY_STORE_PASSWORD" ] || [ -z "$ALIAS" ]; then
+            echo "::error::缺少签名密钥：请在仓库 Settings → Secrets and variables → Actions 中添加 SIGNING_KEY、KEY_STORE_PASSWORD、ALIAS"
+            exit 1
+          fi
+
+      - name: Create Sign File
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          ALIAS: ${{ secrets.ALIAS }}
+        run: |
+          echo "$SIGNING_KEY" | base64 --decode > key.jks
+          {
+            echo "storePassword=$KEY_STORE_PASSWORD"
+            echo "keyAlias=$ALIAS"
+            echo "keyPassword=$KEY_STORE_PASSWORD"
+            echo "storeFile=key.jks"
+          } > signing.properties
+
+      - name: Warm up JitPack (EzXHelper)
+        # JitPack 会清理久未使用的旧构建产物，首次请求只会触发重新构建并返回 404，
+        # 先轮询等它构建完成，避免 Gradle 一次请求就判定"找不到依赖"。失败不影响后续步骤。
+        continue-on-error: true
+        run: |
+          URL="https://jitpack.io/com/github/kyuubiran/EzXHelper/2.0.8/EzXHelper-2.0.8.pom"
+          for i in $(seq 1 20); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' -L "$URL")
+            echo "attempt $i: HTTP $code"
+            if [ "$code" = "200" ]; then exit 0; fi
+            sleep 15
+          done
+          echo "::warning::JitPack 上的 EzXHelper 约 5 分钟内仍不可用，构建可能会因此失败"
+          exit 1
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build with Gradle (Release)
+        shell: bash
+        run: ./gradlew assembleRelease
+
+      - name: Find APKs
+        run: |
+          APK_FILE=$(find app/build/outputs/apk/release -name '*.apk')
+          echo "APK_FILE=$APK_FILE" >> $GITHUB_ENV
+          echo "APK_FILE_NAME=$(basename $APK_FILE .apk)" >> $GITHUB_ENV
+
+      - name: Show APKs SHA256
+        if: success()
+        run: |
+          echo "### Build Success" >> $GITHUB_STEP_SUMMARY
+          echo "|Artifact|SHA256|" >> $GITHUB_STEP_SUMMARY
+          echo "|:---:|:---|" >> $GITHUB_STEP_SUMMARY
+          APK_SHA256=($(sha256sum ${{ env.APK_FILE }}))
+          echo "|Release|$APK_SHA256" >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APK_FILE_NAME }}
+          path: ${{ env.APK_FILE }}
+          compression-level: 9
