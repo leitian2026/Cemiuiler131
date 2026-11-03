@@ -138,7 +138,7 @@ public class Helpers {
     // Permissions 权限
     @SuppressLint({"SetWorldReadable", "SetWorldWritable"})
     public static void fixPermissionsAsync(Context context) {
-        Executor executor = Executors.newSingleThreadExecutor();
+        java.util.concurrent.ExecutorService executor = Executors.newSingleThreadExecutor();
         executor.execute(() -> {
             try {
                 Thread.sleep(500);
@@ -163,6 +163,8 @@ public class Helpers {
                 sharedPrefsFile.setWritable(true, false);
             }
         });
+        // 任务提交后就关闭执行器，否则每次调用都会残留一个空闲线程
+        executor.shutdown();
     }
 
     private static String getCallerMethod() {
@@ -606,13 +608,31 @@ public class Helpers {
         }
     }
 
+    // PackageParser.parsePackage 要完整解析一遍 APK 的 AndroidManifest，很重。
+    // 同一个进程里版本信息不会变，而多个 hook 会反复调用，所以按 APK 路径缓存一次。
+    private static final java.util.concurrent.ConcurrentHashMap<String, Object[]> sVersionInfoCache =
+        new java.util.concurrent.ConcurrentHashMap<>();
+
+    private static Object[] getPackageVersionInfo(XC_LoadPackage.LoadPackageParam lpparam) throws Throwable {
+        String key = lpparam.appInfo.sourceDir;
+        Object[] cached = sVersionInfoCache.get(key);
+        if (cached != null) return cached;
+
+        Class<?> parserCls = XposedHelpers.findClass("android.content.pm.PackageParser", lpparam.classLoader);
+        Object parser = parserCls.newInstance();
+        File apkPath = new File(key);
+        Object pkg = XposedHelpers.callMethod(parser, "parsePackage", apkPath, 0);
+        Object[] info = new Object[]{
+            XposedHelpers.getObjectField(pkg, "mVersionName"),
+            XposedHelpers.getIntField(pkg, "mVersionCode")
+        };
+        sVersionInfoCache.put(key, info);
+        return info;
+    }
+
     public static String getPackageVersionName(XC_LoadPackage.LoadPackageParam lpparam) {
         try {
-            Class<?> parserCls = XposedHelpers.findClass("android.content.pm.PackageParser", lpparam.classLoader);
-            Object parser = parserCls.newInstance();
-            File apkPath = new File(lpparam.appInfo.sourceDir);
-            Object pkg = XposedHelpers.callMethod(parser, "parsePackage", apkPath, 0);
-            String versionName = (String) XposedHelpers.getObjectField(pkg, "mVersionName");
+            String versionName = (String) getPackageVersionInfo(lpparam)[0];
             XposedLogUtils.logI("getPackageVersionName", lpparam + " versionName is " + versionName);
             return versionName;
         } catch (Throwable e) {
@@ -623,11 +643,7 @@ public class Helpers {
 
     public static int getPackageVersionCode(XC_LoadPackage.LoadPackageParam lpparam) {
         try {
-            Class<?> parserCls = XposedHelpers.findClass("android.content.pm.PackageParser", lpparam.classLoader);
-            Object parser = parserCls.newInstance();
-            File apkPath = new File(lpparam.appInfo.sourceDir);
-            Object pkg = XposedHelpers.callMethod(parser, "parsePackage", apkPath, 0);
-            int versionCode = XposedHelpers.getIntField(pkg, "mVersionCode");
+            int versionCode = (Integer) getPackageVersionInfo(lpparam)[1];
             XposedLogUtils.logI("getPackageVersionCode", lpparam + " versionCode is " + versionCode);
             return versionCode;
         } catch (Throwable e) {
