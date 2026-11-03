@@ -6,6 +6,7 @@ import com.sevtinge.cemiuiler.BuildConfig;
 import com.sevtinge.cemiuiler.XposedInit;
 import com.sevtinge.cemiuiler.utils.PrefsMap;
 import com.sevtinge.cemiuiler.utils.ResourcesHook;
+import com.sevtinge.cemiuiler.utils.log.HookStatusReporter;
 import com.sevtinge.cemiuiler.utils.log.XposedLogUtils;
 import com.sevtinge.cemiuiler.utils.log.XposedLogUtils.*;
 
@@ -38,8 +39,10 @@ public abstract class BaseHook {
             if (detailLog && isNotReleaseVersion) {
                 XposedLogUtils.logI(TAG, "Hook Success.");
             }
+            HookStatusReporter.record(lpparam.packageName, lpparam.processName, TAG, true, null);
         } catch (Throwable t) {
             XposedLogUtils.logE(TAG, "Hook Failed", t);
+            HookStatusReporter.record(lpparam.packageName, lpparam.processName, TAG, false, t);
         }
     }
 
