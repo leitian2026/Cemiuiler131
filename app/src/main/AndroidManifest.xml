@@ -120,13 +120,10 @@
             android:value="true" />
         <meta-data
             android:name="xposedminversion"
-            android:value="93" />
+            android:value="82" />
         <meta-data
             android:name="xposeddescription"
             android:value="@string/xposed_description" />
-        <meta-data
-            android:name="xposedsharedprefs"
-            android:value="true" />
         <meta-data
             android:name="xposedscope"
             android:resource="@array/xposed_scope" />
