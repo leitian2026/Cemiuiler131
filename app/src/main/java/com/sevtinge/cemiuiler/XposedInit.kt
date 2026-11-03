@@ -9,6 +9,7 @@ import com.sevtinge.cemiuiler.module.hook.settings.VolumeSeparateControlForSetti
 import com.sevtinge.cemiuiler.module.hook.systemframework.*
 import com.sevtinge.cemiuiler.module.hook.systemui.navigation.HandleLineCustom
 import com.sevtinge.cemiuiler.module.hook.tsmclient.AutoNfc
+import com.sevtinge.cemiuiler.utils.PrefsUtils
 import de.robv.android.xposed.IXposedHookInitPackageResources
 import de.robv.android.xposed.IXposedHookZygoteInit
 import de.robv.android.xposed.callbacks.XC_InitPackageResources
@@ -40,6 +41,9 @@ class XposedInit : BaseXposedInit(), IXposedHookInitPackageResources {
             setLogTag(TAG)
             setToastTag(TAG)
         }
+
+        // 配置快照读取失败时，通过模块 Provider 兜底读取
+        PrefsUtils.ensurePrefsLoaded(lpparam.packageName)
 
         init(lpparam)
         SystemFrameworkForCorePatch().handleLoadPackage(lpparam)
