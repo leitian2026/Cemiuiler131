@@ -13,6 +13,7 @@ import com.github.kyuubiran.ezxhelper.MemberExtensions.paramCount
 import com.github.kyuubiran.ezxhelper.finders.ConstructorFinder.`-Static`.constructorFinder
 import com.github.kyuubiran.ezxhelper.finders.MethodFinder.`-Static`.methodFinder
 import com.sevtinge.cemiuiler.module.base.BaseHook
+import com.sevtinge.cemiuiler.module.hook.systemui.statusbar.clock.SecondClockTicker
 import com.sevtinge.cemiuiler.utils.getObjectFieldAs
 import de.robv.android.xposed.XC_MethodHook
 import java.lang.reflect.Method
@@ -30,17 +31,8 @@ object ClockDisplaySeconds : BaseHook() {
                 try {
                     val viewGroup = it.thisObject as LinearLayout
                     val d: Method = viewGroup.javaClass.getDeclaredMethod("updateTime")
-                    val r = Runnable {
-                        d.isAccessible = true
-                        d.invoke(viewGroup)
-                    }
-
-                    class T : TimerTask() {
-                        override fun run() {
-                            Handler(viewGroup.context.mainLooper).post(r)
-                        }
-                    }
-                    Timer().scheduleAtFixedRate(T(), 1000 - System.currentTimeMillis() % 1000, 1000)
+                    // 统一节拍器：息屏停止、解锁后锁屏时钟不可见时不再刷新
+                    SecondClockTicker.add(viewGroup, d)
                 } catch (_: Exception) {
                 }
             }
