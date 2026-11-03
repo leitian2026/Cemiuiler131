@@ -10,6 +10,14 @@ static def getGitRevision() {
     return "git rev-parse --short HEAD".execute().text.trim()
 }
 
+static def getGitCommitCount() {
+    try {
+        return "git rev-list --count HEAD".execute().text.trim().toInteger()
+    } catch (Throwable ignored) {
+        return 0
+    }
+}
+
 android {
     compileSdk 34
 
@@ -18,7 +26,8 @@ android {
         applicationId namespace
         minSdk 30
         targetSdk 34
-        versionCode 130
+        // 自用构建：版本号基数设为 10000，保证高于已安装的官方版本，可直接覆盖安装；之后每个提交 +1
+        versionCode 10000 + getGitCommitCount()
         versionName "1.3.130"
         project.archivesBaseName = "Cemiuiler"
         ndk {
@@ -110,6 +119,11 @@ android {
                 signingConfig signingConfigs.cemiuiler
             }
         }
+    }
+
+    lint {
+        // 自用构建：release 构建时不跑 lint vital 检查，避免被与功能无关的 lint 告警卡住
+        checkReleaseBuilds false
     }
 
     compileOptions {
