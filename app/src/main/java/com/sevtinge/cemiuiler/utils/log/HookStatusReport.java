@@ -1,6 +1,9 @@
 package com.sevtinge.cemiuiler.utils.log;
 
 import android.content.Context;
+import android.os.Build;
+
+import com.sevtinge.cemiuiler.BuildConfig;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -18,17 +21,21 @@ public final class HookStatusReport {
 
     public static String build(Context context) {
         StringBuilder sb = new StringBuilder();
+        sb.append("模块 ").append(BuildConfig.VERSION_NAME).append(" (").append(BuildConfig.VERSION_CODE).append(")")
+            .append("，Android ").append(Build.VERSION.RELEASE).append(" (SDK ").append(Build.VERSION.SDK_INT).append(")")
+            .append("，").append(Build.MANUFACTURER).append(" ").append(Build.MODEL).append("\n\n");
 
         List<HookStatusStore.Report> reports;
         try {
             reports = HookStatusStore.readAll(context);
         } catch (Throwable t) {
-            return "读取记录失败：" + t;
+            return sb.append("读取记录失败：").append(t).toString();
         }
 
         if (reports.isEmpty()) {
-            return "还没有收到任何上报。\n"
-                + "请确认模块已在 LSPosed 中启用并勾选了作用域，然后重启对应应用或系统框架（重启手机最彻底），再回来查看。";
+            return sb.append("还没有收到任何上报。\n")
+                .append("请确认模块已在 LSPosed 中启用并勾选了作用域，然后重启对应应用或系统框架（重启手机最彻底），再回来查看。")
+                .toString();
         }
 
         Collections.sort(reports, (a, b) -> {
