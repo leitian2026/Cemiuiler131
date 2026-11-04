@@ -125,9 +125,12 @@ public abstract class BaseXposedInit implements IXposedHookLoadPackage, IXposedH
 
     @Override
     public void initZygote(StartupParam startupParam) throws Throwable {
-        setXSharedPrefs();
+        // mResHook 必须先于 setXSharedPrefs() 赋值：BaseHook.mResHook 是 static final，在 BaseHook 类初始化时就被固定。
+        // 而读取配置失败时 setXSharedPrefs() 会打日志，日志类的静态初始化会触发 BaseHook 初始化，
+        // 如果这时 mResHook 还是 null，整个进程里所有用到资源替换的 hook 都会空指针。
         mResHook = new ResourcesHook();
         mModulePath = startupParam.modulePath;
+        setXSharedPrefs();
     }
 
     public void setXSharedPrefs() {
