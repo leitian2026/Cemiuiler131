@@ -96,7 +96,18 @@ public class ModuleSettingsFragment extends SettingsPreferenceFragment
         });
 
         findPreference("prefs_key_hook_status").setOnPreferenceClickListener(preference -> {
-            DialogHelper.showDialog(getActivity(), "功能检查", HookStatusReport.build(getContext()));
+            final String report = HookStatusReport.build(getContext());
+            new moralnorm.appcompat.app.AlertDialog.Builder(getActivity())
+                .setTitle("功能检查")
+                .setMessage(report)
+                .setPositiveButton("复制", (dialog, which) -> {
+                    android.content.ClipboardManager clipboard = (android.content.ClipboardManager)
+                        getActivity().getSystemService(android.content.Context.CLIPBOARD_SERVICE);
+                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("功能检查", report));
+                    android.widget.Toast.makeText(getActivity(), "已复制", android.widget.Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("关闭", (dialog, which) -> dialog.dismiss())
+                .show();
             return true;
         });
 
