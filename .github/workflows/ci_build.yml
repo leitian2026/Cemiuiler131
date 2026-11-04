@@ -52,21 +52,6 @@ jobs:
             echo "storeFile=key.jks"
           } > signing.properties
 
-      - name: Warm up JitPack (EzXHelper)
-        # JitPack 会清理久未使用的旧构建产物，首次请求只会触发重新构建并返回 404，
-        # 先轮询等它构建完成，避免 Gradle 一次请求就判定"找不到依赖"。失败不影响后续步骤。
-        continue-on-error: true
-        run: |
-          URL="https://jitpack.io/com/github/kyuubiran/EzXHelper/2.0.8/EzXHelper-2.0.8.pom"
-          for i in $(seq 1 20); do
-            code=$(curl -s -o /dev/null -w '%{http_code}' -L "$URL")
-            echo "attempt $i: HTTP $code"
-            if [ "$code" = "200" ]; then exit 0; fi
-            sleep 15
-          done
-          echo "::warning::JitPack 上的 EzXHelper 约 5 分钟内仍不可用，构建可能会因此失败"
-          exit 1
-
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
@@ -76,18 +61,25 @@ jobs:
 
       - name: Find APKs
         run: |
-          APK_FILE=$(find app/build/outputs/apk/release -name '*.apk')
-          echo "APK_FILE=$APK_FILE" >> $GITHUB_ENV
-          echo "APK_FILE_NAME=$(basename $APK_FILE .apk)" >> $GITHUB_ENV
+          APK_FILE=$(find app/build/outputs/apk/release -name '*.apk' | head -n 1)
+          if [ -z "$APK_FILE" ]; then
+            echo "::error::没有找到构建出的 APK"
+            exit 1
+          fi
+          echo "APK_FILE=$APK_FILE" >> "$GITHUB_ENV"
+          echo "APK_FILE_NAME=$(basename "$APK_FILE" .apk)" >> "$GITHUB_ENV"
 
       - name: Show APKs SHA256
         if: success()
         run: |
-          echo "### Build Success" >> $GITHUB_STEP_SUMMARY
-          echo "|Artifact|SHA256|" >> $GITHUB_STEP_SUMMARY
-          echo "|:---:|:---|" >> $GITHUB_STEP_SUMMARY
-          APK_SHA256=($(sha256sum ${{ env.APK_FILE }}))
-          echo "|Release|$APK_SHA256" >> $GITHUB_STEP_SUMMARY
+          # 文件名里带括号，必须通过带引号的环境变量使用，不能直接拼进命令
+          APK_SHA256=$(sha256sum "$APK_FILE" | cut -d' ' -f1)
+          {
+            echo "### Build Success"
+            echo "|Artifact|SHA256|"
+            echo "|:---:|:---|"
+            echo "|Release|$APK_SHA256|"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload APKs
         uses: actions/upload-artifact@v4
