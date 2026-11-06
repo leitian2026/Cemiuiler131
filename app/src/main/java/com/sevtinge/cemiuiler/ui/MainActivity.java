@@ -259,7 +259,7 @@ public class MainActivity extends SettingsActivity {
     private boolean PermissionRecord(boolean iNeedGet) {
         @SuppressLint({"WorldWriteableFiles", "WorldReadableFiles"})
         SharedPreferences sharedPreferences =
-            getSharedPreferences(mPermission, MODE_WORLD_WRITEABLE | MODE_WORLD_READABLE);
+            getSharedPreferences(mPermission, MODE_PRIVATE);
         if (!iNeedGet) {
             boolean mPermissionRecord = sharedPreferences.getBoolean("mPermissionRecord", false);
         /*
