@@ -42,10 +42,12 @@ class XposedInit : BaseXposedInit(), IXposedHookInitPackageResources {
             setToastTag(TAG)
         }
 
-        // 配置快照读取失败时，通过模块 Provider 兜底读取
-        PrefsUtils.ensurePrefsLoaded(lpparam.packageName)
-
-        init(lpparam)
+        // 先拿到配置再决定装哪些 hook；Provider 暂时不可用时延后安装（只会执行一次）
+        PrefsUtils.runWhenPrefsReady(lpparam.packageName) {
+            // 延后执行时 EzXHelper 的全局状态可能已被别的包覆盖，重新绑定
+            EzXHelper.initHandleLoadPackage(lpparam)
+            init(lpparam)
+        }
         SystemFrameworkForCorePatch().handleLoadPackage(lpparam)
     }
 
