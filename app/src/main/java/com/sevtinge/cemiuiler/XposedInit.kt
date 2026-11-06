@@ -43,7 +43,7 @@ class XposedInit : BaseXposedInit(), IXposedHookInitPackageResources {
         }
 
         // 先拿到配置再决定装哪些 hook；Provider 暂时不可用时延后安装（只会执行一次）
-        PrefsUtils.runWhenPrefsReady(lpparam.packageName) {
+        PrefsUtils.runWhenPrefsReady(lpparam) {
             // 延后执行时 EzXHelper 的全局状态可能已被别的包覆盖，重新绑定
             EzXHelper.initHandleLoadPackage(lpparam)
             init(lpparam)
