@@ -19,6 +19,7 @@ import com.sevtinge.cemiuiler.utils.log.HookStatusStore;
 
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -160,6 +161,32 @@ public class SharedPrefsProvider extends ContentProvider {
 
     @Override
     public Bundle call(String method, String arg, Bundle extras) {
+        if (PrefsUtils.METHOD_GET_ALL.equals(method)) {
+            // 导出全部配置，供被 hook 进程读取（保留原始类型）
+            Bundle result = new Bundle();
+            try {
+                Bundle values = new Bundle();
+                for (Map.Entry<String, ?> entry : prefs.getAll().entrySet()) {
+                    String key = entry.getKey();
+                    Object v = entry.getValue();
+                    if (v instanceof Boolean) values.putBoolean(key, (Boolean) v);
+                    else if (v instanceof Integer) values.putInt(key, (Integer) v);
+                    else if (v instanceof Long) values.putLong(key, (Long) v);
+                    else if (v instanceof Float) values.putFloat(key, (Float) v);
+                    else if (v instanceof String) values.putString(key, (String) v);
+                    else if (v instanceof Set<?>) {
+                        ArrayList<String> list = new ArrayList<>();
+                        for (Object o : (Set<?>) v) if (o != null) list.add(o.toString());
+                        values.putStringArrayList(key, list);
+                    }
+                }
+                result.putBundle("values", values);
+                result.putBoolean("ok", true);
+            } catch (Throwable t) {
+                result.putBoolean("ok", false);
+            }
+            return result;
+        }
         if (HookStatusStore.METHOD_REPORT.equals(method) && extras != null) {
             Bundle result = new Bundle();
             try {
