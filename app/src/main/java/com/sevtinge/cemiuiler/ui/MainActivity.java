@@ -65,9 +65,11 @@ public class MainActivity extends SettingsActivity {
         initData();
         setImmersionMenuEnabled(true);
         setFragment(mMainFrag);
-        ShellUtils.execCommand("chmod 0777 " + getPackageCodePath()
-                + " ; chmod 0777 " + PrefsUtils.mPrefsFile
-                + " ; chown root:root " + PrefsUtils.mPrefsFile,
+        // 把之前被放开成 0777 / root 属主的 APK 和配置文件恢复为正常权限
+        final int uid = android.os.Process.myUid();
+        ShellUtils.execCommand("chmod 0644 " + getPackageCodePath()
+                + " ; chown " + uid + ":" + uid + " " + PrefsUtils.mPrefsFile
+                + " ; chmod 0660 " + PrefsUtils.mPrefsFile,
             true, false);
         // ShellUtils.execCommand("chmod 0777 " + PrefsUtils.mPrefsFile, true, false);
         // ShellUtils.execCommand("chown root:root " + PrefsUtils.mPrefsFile, true, false);
