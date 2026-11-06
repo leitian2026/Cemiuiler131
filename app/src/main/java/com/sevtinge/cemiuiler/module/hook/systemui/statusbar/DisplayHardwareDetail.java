@@ -3,7 +3,10 @@ package com.sevtinge.cemiuiler.module.hook.systemui.statusbar;
 import static de.robv.android.xposed.XposedHelpers.callMethod;
 
 import android.annotation.SuppressLint;
+import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.res.Resources;
 import android.graphics.Typeface;
 import android.os.Handler;
@@ -402,9 +405,24 @@ public class DisplayHardwareDetail extends BaseHook {
                             }
                         }
                         mBgHandler.removeMessages(200021);
-                        mBgHandler.sendEmptyMessageDelayed(200021, mPrefsMap.getInt("system_ui_statusbar_" + subKey + "_update_spacing", 2) * 1000L);
+                        // 息屏时不再安排下一次刷新（亮屏广播会重新拉起），避免息屏期间定时唤醒
+                        PowerManager pm = (PowerManager) mContext.getSystemService(Context.POWER_SERVICE);
+                        if (pm != null && pm.isInteractive()) {
+                            mBgHandler.sendEmptyMessageDelayed(200021, mPrefsMap.getInt("system_ui_statusbar_" + subKey + "_update_spacing", 2) * 1000L);
+                        }
                     }
                 };
+                try {
+                    mContext.registerReceiver(new BroadcastReceiver() {
+                        @Override
+                        public void onReceive(Context context, Intent intent) {
+                            mBgHandler.removeMessages(200021);
+                            mBgHandler.sendEmptyMessage(200021);
+                        }
+                    }, new IntentFilter(Intent.ACTION_SCREEN_ON), null, mBgHandler);
+                } catch (Throwable t) {
+                    XposedLogUtils.logE("DisplayHardwareDetail", t);
+                }
                 mBgHandler.sendEmptyMessage(200021);
             }
         });
