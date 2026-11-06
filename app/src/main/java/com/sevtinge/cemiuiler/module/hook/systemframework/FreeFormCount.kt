@@ -21,9 +21,10 @@ class FreeFormCount : BaseHook() {
         }
 
         // ShouldStopStartFreeform
-        clazzMiuiFreeFormStackDisplayStrategy.methodFinder().first {
+        // 有的系统版本没有这个方法：没有就不用 hook，不应让整个功能失败
+        clazzMiuiFreeFormStackDisplayStrategy.methodFinder().filter {
             name == "shouldStopStartFreeform"
-        }.createHook {
+        }.toList().createHooks {
             returnConstant(false)
         }
     }
