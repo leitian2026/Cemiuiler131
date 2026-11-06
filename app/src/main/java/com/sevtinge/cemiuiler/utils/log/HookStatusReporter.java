@@ -15,12 +15,13 @@ import java.util.Map;
 
 /**
  * 运行在被 hook 的进程内：收集各个 hook 的安装结果，延迟后通过模块的 Provider 上报给模块进程。
- * 上报在后台线程进行，失败会重试（system_server 启动早期 Provider 不可用），不会阻塞 hook 流程。
+ * 上报在后台线程进行：等“系统就绪”事件后才开始（system_server 启动早期 Provider 不可用），
+ * 失败最多再试一次，不轮询，不会阻塞 hook 流程。
  */
 public final class HookStatusReporter {
     private static final long FIRST_DELAY_MS = 3000;
     private static final long RETRY_DELAY_MS = 5000;
-    private static final int MAX_TRIES = 60;
+    private static final int MAX_TRIES = 2;
 
     private static final class Pending {
         final String packageName;
@@ -80,12 +81,13 @@ public final class HookStatusReporter {
     private static void schedule() {
         if (sScheduled) return;
         sScheduled = true;
-        Thread thread = new Thread(() -> {
+        // 事件驱动：系统就绪后才开始；之后等一小段时间攒一批再上报（一次性，不是轮询）
+        PrefsUtils.runWhenSystemReady(() -> {
             try {
                 Thread.sleep(FIRST_DELAY_MS);
                 for (int i = 0; i < MAX_TRIES; i++) {
                     if (flush()) break;
-                    Thread.sleep(RETRY_DELAY_MS);
+                    if (i + 1 < MAX_TRIES) Thread.sleep(RETRY_DELAY_MS);
                 }
             } catch (InterruptedException ignored) {
             } catch (Throwable ignored) {
@@ -95,9 +97,7 @@ public final class HookStatusReporter {
                     if (sDirty) schedule();
                 }
             }
-        }, "Cemiuiler-HookStatus");
-        thread.setDaemon(true);
-        thread.start();
+        }, false);
     }
 
     /**
