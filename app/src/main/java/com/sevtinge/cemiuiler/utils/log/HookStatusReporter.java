@@ -130,7 +130,8 @@ public final class HookStatusReporter {
                 String why = PrefsUtils.sLastLoadNote;
                 toSend.add("fail|[ConfigPrefs]|配置为空，设置可能未生效" + (why == null ? "" : "；" + clean(why, 100)));
             } else {
-                toSend.add("ok|[ConfigPrefs]|");
+                String src = PrefsUtils.sConfigSource;
+                toSend.add("ok|[ConfigPrefs]|" + (src == null ? "" : clean(src, 40)));
             }
             try {
                 Bundle extras = new Bundle();
