@@ -57,7 +57,7 @@ public final class HookStatusReport {
                 String name = parts[1];
                 String message = parts.length > 2 ? parts[2] : "";
                 if ("[ConfigPrefs]".equals(name)) {
-                    configLine = ok ? "配置读取：正常" : "配置读取：异常（" + message + "）";
+                    configLine = ok ? "配置读取：正常" + (message.isEmpty() ? "" : "（来源：" + message + "）") : "配置读取：异常（" + message + "）";
                     if (!ok) fails.add("[配置读取] " + message);
                     continue;
                 }
