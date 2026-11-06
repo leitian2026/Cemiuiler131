@@ -135,8 +135,7 @@ public class Helpers {
     }
 
 
-    // Permissions 权限
-    @SuppressLint({"SetWorldReadable", "SetWorldWritable"})
+    // Permissions 权限：只收紧，不再放开（配置通过 Provider 传递）
     public static void fixPermissionsAsync(Context context) {
         java.util.concurrent.ExecutorService executor = Executors.newSingleThreadExecutor();
         executor.execute(() -> {
@@ -144,24 +143,7 @@ public class Helpers {
                 Thread.sleep(500);
             } catch (Throwable ignore) {
             }
-            File pkgFolder = context.getDataDir();
-            if (pkgFolder.exists()) {
-                pkgFolder.setExecutable(true, false);
-                pkgFolder.setReadable(true, false);
-                pkgFolder.setWritable(true, false);
-            }
-            File sharedPrefsFolder = new File(PrefsUtils.getSharedPrefsPath());
-            if (sharedPrefsFolder.exists()) {
-                sharedPrefsFolder.setExecutable(true, false);
-                sharedPrefsFolder.setReadable(true, false);
-                sharedPrefsFolder.setWritable(true, false);
-            }
-            File sharedPrefsFile = new File(PrefsUtils.getSharedPrefsFile());
-            if (sharedPrefsFile.exists()) {
-                sharedPrefsFile.setReadable(true, false);
-                sharedPrefsFile.setExecutable(true, false);
-                sharedPrefsFile.setWritable(true, false);
-            }
+            PrefsUtils.makePrefsPrivate(context);
         });
         // 任务提交后就关闭执行器，否则每次调用都会残留一个空闲线程
         executor.shutdown();
