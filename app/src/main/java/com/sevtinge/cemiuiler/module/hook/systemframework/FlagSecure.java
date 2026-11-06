@@ -4,6 +4,7 @@ import android.os.Build;
 import android.util.Log;
 
 import com.sevtinge.cemiuiler.module.base.BaseHook;
+import com.sevtinge.cemiuiler.utils.log.HookStatusReporter;
 import com.sevtinge.cemiuiler.utils.log.XposedLogUtils;
 
 import java.lang.reflect.InvocationTargetException;
@@ -35,10 +36,15 @@ public class FlagSecure extends BaseHook {
         deoptimizeMethod = m;
     }
 
-    static void deoptimizeMethod(Class<?> c, String n) throws InvocationTargetException, IllegalAccessException {
+    // 本次实际去优化的方法数，上报到状态页，便于判断开销和缩小范围
+    private int deoptCount = 0;
+    private boolean deoptFailed = false;
+
+    private void deoptimizeMethod(Class<?> c, String n) throws InvocationTargetException, IllegalAccessException {
         for (Method m : c.getDeclaredMethods()) {
             if (deoptimizeMethod != null && m.getName().equals(n)) {
                 deoptimizeMethod.invoke(null, m);
+                deoptCount++;
                 Log.d("DisableFlagSecure", "Deoptimized " + m);
             }
         }
@@ -73,6 +79,7 @@ public class FlagSecure extends BaseHook {
                 c = XposedHelpers.findClass("com.android.server.wm.InsetsPolicy$InsetsPolicyAnimationControlListener", lpparam.classLoader);
                 for (var m : c.getDeclaredConstructors()) {
                     deoptimizeMethod.invoke(null, m);
+                    deoptCount++;
                 }
                 c = XposedHelpers.findClass("com.android.server.wm.InsetsPolicy", lpparam.classLoader);
                 deoptimizeMethod(c, "startAnimation");
@@ -93,7 +100,11 @@ public class FlagSecure extends BaseHook {
                 }
             } catch (Throwable t) {
                 XposedLogUtils.logE(TAG, t);
+                deoptFailed = true;
             }
+            // 状态页里显示实际去优化了多少个方法（失败时是失败前已完成的数量）
+            HookStatusReporter.record(lpparam.packageName, lpparam.processName,
+                "FlagSecure 去优化" + deoptCount + "个方法" + (deoptFailed ? "(中途异常)" : ""), true, null);
         }
     }
 }
