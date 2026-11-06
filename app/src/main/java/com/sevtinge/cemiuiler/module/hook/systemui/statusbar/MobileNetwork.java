@@ -22,6 +22,14 @@ public class MobileNetwork extends BaseHook {
 
         mHDController = findClassIfExists("com.android.systemui.statusbar.policy.HDController");
 
+        java.util.List<String> missing = new java.util.ArrayList<>();
+        java.util.List<String> problems = new java.util.ArrayList<>();
+        if (mStatusBarMobileView == null) missing.add("StatusBarMobileView");
+        if (mMobileIconState == null) missing.add("MobileIconState");
+        if (mHDController == null) missing.add("HDController");
+
+        if (mStatusBarMobileView != null && mMobileIconState != null) {
+            try {
         findAndHookMethod(mStatusBarMobileView, "initViewState", mMobileIconState, new MethodHook() {
             @Override
             protected void after(MethodHookParam param) {
@@ -30,6 +38,12 @@ public class MobileNetwork extends BaseHook {
             }
         });
 
+            } catch (Throwable t) {
+                problems.add("initViewState:" + t.getClass().getSimpleName());
+            }
+        }
+        if (mStatusBarMobileView != null && mMobileIconState != null) {
+            try {
         findAndHookMethod(mStatusBarMobileView, "updateState", mMobileIconState, new MethodHook() {
             @Override
             protected void after(MethodHookParam param) {
@@ -38,6 +52,12 @@ public class MobileNetwork extends BaseHook {
             }
         });
 
+            } catch (Throwable t) {
+                problems.add("updateState:" + t.getClass().getSimpleName());
+            }
+        }
+        if (mStatusBarMobileView != null) {
+            try {
         hookAllMethods(mStatusBarMobileView, "applyMobileState", new MethodHook() {
             @Override
             protected void after(MethodHookParam param) {
@@ -59,6 +79,12 @@ public class MobileNetwork extends BaseHook {
             }
         });
 
+            } catch (Throwable t) {
+                problems.add("applyMobileState:" + t.getClass().getSimpleName());
+            }
+        }
+        if (mHDController != null) {
+            try {
         findAndHookMethod(mHDController, "update", new MethodHook() {
             @Override
             protected void before(MethodHookParam param) {
@@ -68,7 +94,15 @@ public class MobileNetwork extends BaseHook {
                 }
             }
         });
+            } catch (Throwable t) {
+                problems.add("HD update:" + t.getClass().getSimpleName());
+            }
+        }
 
+        // 能装的 hook 已经装上；缺类的部分在这个系统版本上不可用，在状态页里写明
+        if (!missing.isEmpty() || !problems.isEmpty()) {
+            throw new IllegalStateException("部分未生效 缺类" + missing + " 失败" + problems);
+        }
 
         // 信号
         /*hookAllMethods("com.android.systemui.statusbar.StatusBarMobileView", "applyMobileState", new MethodHook() {
