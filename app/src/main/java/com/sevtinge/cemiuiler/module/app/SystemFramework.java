@@ -58,41 +58,41 @@ public class SystemFramework extends BaseModule {
             XposedBridge.log("[Cemiuiler][I]: Detail log is disabled.");
 
         // 小窗
-        initHook(new FreeFormCount(), mPrefsMap.getBoolean("system_framework_freeform_count"));
-        initHook(new FreeformBubble(), mPrefsMap.getBoolean("system_framework_freeform_bubble"));
-        initHook(new DisableFreeformBlackList(), mPrefsMap.getBoolean("system_framework_disable_freeform_blacklist"));
-        initHook(RemoveSmallWindowRestrictions.INSTANCE, mPrefsMap.getBoolean("system_framework_disable_freeform_blacklist"));
-        initHook(new StickyFloatingWindows(), mPrefsMap.getBoolean("system_framework_freeform_sticky"));
-        initHook(MultiFreeFormSupported.INSTANCE, mPrefsMap.getBoolean("system_framework_freeform_recents_to_small_freeform"));
-        initHook(new OpenAppInFreeForm(), mPrefsMap.getBoolean("system_framework_freeform_jump"));
+        safeInit("FreeFormCount", () -> initHook(new FreeFormCount(), mPrefsMap.getBoolean("system_framework_freeform_count")));
+        safeInit("FreeformBubble", () -> initHook(new FreeformBubble(), mPrefsMap.getBoolean("system_framework_freeform_bubble")));
+        safeInit("DisableFreeformBlackList", () -> initHook(new DisableFreeformBlackList(), mPrefsMap.getBoolean("system_framework_disable_freeform_blacklist")));
+        safeInit("RemoveSmallWindowRestrictions", () -> initHook(RemoveSmallWindowRestrictions.INSTANCE, mPrefsMap.getBoolean("system_framework_disable_freeform_blacklist")));
+        safeInit("StickyFloatingWindows", () -> initHook(new StickyFloatingWindows(), mPrefsMap.getBoolean("system_framework_freeform_sticky")));
+        safeInit("MultiFreeFormSupported", () -> initHook(MultiFreeFormSupported.INSTANCE, mPrefsMap.getBoolean("system_framework_freeform_recents_to_small_freeform")));
+        safeInit("OpenAppInFreeForm", () -> initHook(new OpenAppInFreeForm(), mPrefsMap.getBoolean("system_framework_freeform_jump")));
         // initHook(new OpenAppInFreeForm(), mPrefsMap.getBoolean("system_framework_freeform_jump"));
 
         // 音量
-        initHook(new VolumeDefaultStream());
-        initHook(new VolumeFirstPress(), mPrefsMap.getBoolean("system_framework_volume_first_press"));
-        initHook(new VolumeSeparateControl(), mPrefsMap.getBoolean("system_framework_volume_separate_control"));
-        initHook(new VolumeSteps(), mPrefsMap.getInt("system_framework_volume_steps", 0) > 0);
-        initHook(new VolumeMediaSteps(), mPrefsMap.getBoolean("system_framework_volume_media_steps_enable"));
-        initHook(new VolumeDisableSafe(), mPrefsMap.getBoolean("system_framework_volume_disable_safe"));
+        safeInit("VolumeDefaultStream", () -> initHook(new VolumeDefaultStream()));
+        safeInit("VolumeFirstPress", () -> initHook(new VolumeFirstPress(), mPrefsMap.getBoolean("system_framework_volume_first_press")));
+        safeInit("VolumeSeparateControl", () -> initHook(new VolumeSeparateControl(), mPrefsMap.getBoolean("system_framework_volume_separate_control")));
+        safeInit("VolumeSteps", () -> initHook(new VolumeSteps(), mPrefsMap.getInt("system_framework_volume_steps", 0) > 0));
+        safeInit("VolumeMediaSteps", () -> initHook(new VolumeMediaSteps(), mPrefsMap.getBoolean("system_framework_volume_media_steps_enable")));
+        safeInit("VolumeDisableSafe", () -> initHook(new VolumeDisableSafe(), mPrefsMap.getBoolean("system_framework_volume_disable_safe")));
         // initHook(new ClockShowSecond(), mPrefsMap.getBoolean("system_ui_statusbar_clock_show_second"));
 
-        initHook(new ThemeProvider(), mPrefsMap.getBoolean("various_enable_super_function") && mPrefsMap.getBoolean("various_theme_crack"));
+        safeInit("ThemeProvider", () -> initHook(new ThemeProvider(), mPrefsMap.getBoolean("various_enable_super_function") && mPrefsMap.getBoolean("various_theme_crack")));
 
         // 其他
-        initHook(new ScreenRotation(), mPrefsMap.getBoolean("system_framework_screen_all_rotations"));
-        initHook(new CleanShareMenu(), mPrefsMap.getBoolean("system_framework_clean_share_menu"));
-        initHook(new CleanOpenMenu(), mPrefsMap.getBoolean("system_framework_clean_open_menu"));
-        initHook(new AllowUntrustedTouch(), mPrefsMap.getBoolean("system_framework_allow_untrusted_touch"));
-        initHook(new FlagSecure(), mPrefsMap.getBoolean("system_other_flag_secure"));
-        initHook(new AppLinkVerify(), mPrefsMap.getBoolean("system_framework_disable_app_link_verify"));
-        initHook(new UseOriginalAnimation(), mPrefsMap.getBoolean("system_framework_other_use_original_animation"));
-        initHook(new SpeedInstall(), mPrefsMap.getBoolean("system_framework_other_speed_install"));
-        initHook(DeleteOnPostNotification.INSTANCE, mPrefsMap.getBoolean("system_other_delete_on_post_notification"));
-        initHook(NoAccessDeviceLogsRequest.INSTANCE, mPrefsMap.getBoolean("various_disable_access_device_logs"));
+        safeInit("ScreenRotation", () -> initHook(new ScreenRotation(), mPrefsMap.getBoolean("system_framework_screen_all_rotations")));
+        safeInit("CleanShareMenu", () -> initHook(new CleanShareMenu(), mPrefsMap.getBoolean("system_framework_clean_share_menu")));
+        safeInit("CleanOpenMenu", () -> initHook(new CleanOpenMenu(), mPrefsMap.getBoolean("system_framework_clean_open_menu")));
+        safeInit("AllowUntrustedTouch", () -> initHook(new AllowUntrustedTouch(), mPrefsMap.getBoolean("system_framework_allow_untrusted_touch")));
+        safeInit("FlagSecure", () -> initHook(new FlagSecure(), mPrefsMap.getBoolean("system_other_flag_secure")));
+        safeInit("AppLinkVerify", () -> initHook(new AppLinkVerify(), mPrefsMap.getBoolean("system_framework_disable_app_link_verify")));
+        safeInit("UseOriginalAnimation", () -> initHook(new UseOriginalAnimation(), mPrefsMap.getBoolean("system_framework_other_use_original_animation")));
+        safeInit("SpeedInstall", () -> initHook(new SpeedInstall(), mPrefsMap.getBoolean("system_framework_other_speed_install")));
+        safeInit("DeleteOnPostNotification", () -> initHook(DeleteOnPostNotification.INSTANCE, mPrefsMap.getBoolean("system_other_delete_on_post_notification")));
+        safeInit("NoAccessDeviceLogsRequest", () -> initHook(NoAccessDeviceLogsRequest.INSTANCE, mPrefsMap.getBoolean("various_disable_access_device_logs")));
 
         // 显示
-        initHook(DisplayCutout.INSTANCE, mPrefsMap.getBoolean("system_ui_display_hide_cutout_enable"));
-        initHook(new ToastTime(), mPrefsMap.getBoolean("system_ui_display_toast_times_enable"));
+        safeInit("DisplayCutout", () -> initHook(DisplayCutout.INSTANCE, mPrefsMap.getBoolean("system_ui_display_hide_cutout_enable")));
+        safeInit("ToastTime", () -> initHook(new ToastTime(), mPrefsMap.getBoolean("system_ui_display_toast_times_enable")));
         // initHook(new AutoBrightness(), mPrefsMap.getBoolean("system_control_center_auto_brightness"));
 
         // 位置模拟
@@ -100,33 +100,33 @@ public class SystemFramework extends BaseModule {
 
         // 小米/红米平板设置相关
         if (isPad()) {
-            initHook(IgnoreStylusKeyGesture.INSTANCE, mPrefsMap.getBoolean("mipad_input_ingore_gesture"));
-            initHook(NoMagicPointer.INSTANCE, mPrefsMap.getBoolean("mipad_input_close_magic"));
-            initHook(RemoveStylusBluetoothRestriction.INSTANCE, mPrefsMap.getBoolean("mipad_input_disable_bluetooth"));
-            initHook(RestoreEsc.INSTANCE, mPrefsMap.getBoolean("mipad_input_restore_esc"));
-            initHook(SetGestureNeedFingerNum.INSTANCE, mPrefsMap.getBoolean("mipad_input_need_finger_num"));
+            safeInit("IgnoreStylusKeyGesture", () -> initHook(IgnoreStylusKeyGesture.INSTANCE, mPrefsMap.getBoolean("mipad_input_ingore_gesture")));
+            safeInit("NoMagicPointer", () -> initHook(NoMagicPointer.INSTANCE, mPrefsMap.getBoolean("mipad_input_close_magic")));
+            safeInit("RemoveStylusBluetoothRestriction", () -> initHook(RemoveStylusBluetoothRestriction.INSTANCE, mPrefsMap.getBoolean("mipad_input_disable_bluetooth")));
+            safeInit("RestoreEsc", () -> initHook(RestoreEsc.INSTANCE, mPrefsMap.getBoolean("mipad_input_restore_esc")));
+            safeInit("SetGestureNeedFingerNum", () -> initHook(SetGestureNeedFingerNum.INSTANCE, mPrefsMap.getBoolean("mipad_input_need_finger_num")));
         }
 
         // 核心破解
         if (isMoreAndroidVersion(33)) {
-            initHook(BypassSignCheckForT.INSTANCE, mPrefsMap.getBoolean("system_framework_core_patch_auth_creak") ||
-                mPrefsMap.getBoolean("system_framework_core_patch_disable_integrity"));
+            safeInit("BypassSignCheckForT", () -> initHook(BypassSignCheckForT.INSTANCE, mPrefsMap.getBoolean("system_framework_core_patch_auth_creak") ||
+                mPrefsMap.getBoolean("system_framework_core_patch_disable_integrity")));
         }
 
         // 网络
-        initHook(DualNRSupport.INSTANCE, mPrefsMap.getBoolean("phone_double_5g_nr"));
-        initHook(DualSASupport.INSTANCE, mPrefsMap.getBoolean("phone_double_5g_sa"));
-        initHook(N1Band.INSTANCE, mPrefsMap.getBoolean("phone_n1"));
-        initHook(N5N8Band.INSTANCE, mPrefsMap.getBoolean("phone_n5_n8"));
-        initHook(N28Band.INSTANCE, mPrefsMap.getBoolean("phone_n28"));
+        safeInit("DualNRSupport", () -> initHook(DualNRSupport.INSTANCE, mPrefsMap.getBoolean("phone_double_5g_nr")));
+        safeInit("DualSASupport", () -> initHook(DualSASupport.INSTANCE, mPrefsMap.getBoolean("phone_double_5g_sa")));
+        safeInit("N1Band", () -> initHook(N1Band.INSTANCE, mPrefsMap.getBoolean("phone_n1")));
+        safeInit("N5N8Band", () -> initHook(N5N8Band.INSTANCE, mPrefsMap.getBoolean("phone_n5_n8")));
+        safeInit("N28Band", () -> initHook(N28Band.INSTANCE, mPrefsMap.getBoolean("phone_n28")));
 
         // Other
-        initHook(new PackagePermissions());
-        initHook(new GlobalActions(), mLoadPackageParam.processName.equals("android"));
-        initHook(new AppDisableService());
-        initHook(new ThermalBrightness(), mPrefsMap.getBoolean("system_framework_other_thermal_brightness"));
-        initHook(DisableCleaner.INSTANCE, mPrefsMap.getBoolean("system_framework_other_disable_cleaner"));
-        initHook(new DisablePinVerifyPer72h(), mPrefsMap.getBoolean("system_framework_disable_72h_verify"));
+        safeInit("PackagePermissions", () -> initHook(new PackagePermissions()));
+        safeInit("GlobalActions", () -> initHook(new GlobalActions(), mLoadPackageParam.processName.equals("android")));
+        safeInit("AppDisableService", () -> initHook(new AppDisableService()));
+        safeInit("ThermalBrightness", () -> initHook(new ThermalBrightness(), mPrefsMap.getBoolean("system_framework_other_thermal_brightness")));
+        safeInit("DisableCleaner", () -> initHook(DisableCleaner.INSTANCE, mPrefsMap.getBoolean("system_framework_other_disable_cleaner")));
+        safeInit("DisablePinVerifyPer72h", () -> initHook(new DisablePinVerifyPer72h(), mPrefsMap.getBoolean("system_framework_disable_72h_verify")));
     }
 
 }
