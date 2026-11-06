@@ -168,19 +168,6 @@ public class MainActivity extends SettingsActivity {
         };
 
         PrefsUtils.mSharedPreferences.registerOnSharedPreferenceChangeListener(mPreferenceChangeListener);
-        Helpers.fixPermissionsAsync(getApplicationContext());
-
-        try {
-            FileObserver mFileObserver = new FileObserver(PrefsUtils.getSharedPrefsPath(), FileObserver.CLOSE_WRITE) {
-                @Override
-                public void onEvent(int event, String path) {
-                    Helpers.fixPermissionsAsync(getApplicationContext());
-                }
-            };
-            mFileObserver.startWatching();
-        } catch (Throwable t) {
-            Log.e("prefs", "Failed to start FileObserver!");
-        }
     }
 
     void findMod(String filter) {
