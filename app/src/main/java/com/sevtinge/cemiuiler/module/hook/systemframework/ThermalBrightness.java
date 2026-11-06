@@ -11,6 +11,14 @@ public class ThermalBrightness extends BaseHook {
     public final String thermalBrightnessController = "com.android.server.display.ThermalBrightnessController";
     public final String temperatureController = "com.android.server.display.TemperatureController";
 
+
+    /** 目标类在当前系统里不存在时按“没有这个方法”处理（跳过这一段），而不是空指针中断整个初始化 */
+    private Class<?> classOrThrow(String name) throws NoSuchMethodException {
+        Class<?> clazz = findClassIfExists(name);
+        if (clazz == null) throw new NoSuchMethodException("class not found: " + name);
+        return clazz;
+    }
+
     @Override
     public void init() {
         try {
@@ -44,7 +52,7 @@ public class ThermalBrightness extends BaseHook {
         }
 
         try {
-            findClassIfExists(temperatureController).getDeclaredMethod("updateTemperature");
+            classOrThrow(temperatureController).getDeclaredMethod("updateTemperature");
             findAndHookMethod(temperatureController,
                 "updateTemperature", new MethodHook() {
                     @Override
@@ -67,7 +75,7 @@ public class ThermalBrightness extends BaseHook {
         );*/
 
         try {
-            findClassIfExists(displayPowerControllerImpl).getDeclaredMethod("updateThermalBrightness", float.class);
+            classOrThrow(displayPowerControllerImpl).getDeclaredMethod("updateThermalBrightness", float.class);
             findAndHookMethod(displayPowerControllerImpl,
                 "updateThermalBrightness", float.class, new MethodHook() {
                     @Override
@@ -81,7 +89,7 @@ public class ThermalBrightness extends BaseHook {
         }
 
         try {
-            findClassIfExists(thermalBrightnessController).getDeclaredMethod("updateThermalBrightnessIfNeeded");
+            classOrThrow(thermalBrightnessController).getDeclaredMethod("updateThermalBrightnessIfNeeded");
             findAndHookMethod(thermalBrightnessController,
                 "updateThermalBrightnessIfNeeded", new MethodHook() {
                     @Override
