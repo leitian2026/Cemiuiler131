@@ -135,26 +135,13 @@ public abstract class BaseXposedInit implements IXposedHookLoadPackage, IXposedH
 
     public void setXSharedPrefs() {
         if (mPrefsMap.size() == 0) {
-            XSharedPreferences mXSharedPreferences;
             try {
-                mXSharedPreferences = new XSharedPreferences(Helpers.mAppModulePkg, PrefsUtils.mPrefsName);
-                mXSharedPreferences.makeWorldReadable();
-
-                Map<String, ?> allPrefs = mXSharedPreferences == null ? null : mXSharedPreferences.getAll();
-                if (allPrefs == null || allPrefs.size() == 0) {
-                    mXSharedPreferences = new XSharedPreferences(new File(PrefsUtils.mPrefsFile));
-                    mXSharedPreferences.makeWorldReadable();
-                    allPrefs = mXSharedPreferences == null ? null : mXSharedPreferences.getAll();
-                    if (allPrefs == null || allPrefs.size() == 0) {
-                        XposedLogUtils.logE(
-                            "[UID" + android.os.Process.myUid() + "]",
-                            "Cannot read module's SharedPreferences, some mods might not work!"
-                        );
-                    } else {
-                        mPrefsMap.putAll(allPrefs);
-                    }
-                } else {
-                    mPrefsMap.putAll(allPrefs);
+                // 只直接读配置文件，不再使用 New XSharedPreferences（LSPosed 已废弃）
+                if (!PrefsUtils.loadFromFile()) {
+                    XposedLogUtils.logE(
+                        "[UID" + android.os.Process.myUid() + "]",
+                        "Cannot read module's SharedPreferences, some mods might not work!"
+                    );
                 }
             } catch (Throwable t) {
                 LogD("setXSharedPrefs", t);
