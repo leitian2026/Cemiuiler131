@@ -10,9 +10,9 @@ import com.sevtinge.cemiuiler.utils.api.field
 import com.sevtinge.cemiuiler.utils.log.XposedLogUtils
 
 object RemoveSmallWindowRestrictions : BaseHook() {
-    private val mSettingsClass = loadClass("com.android.server.wm.WindowManagerService\$SettingsObserver")
-    private val mWindowsUtilsClass = loadClass("android.util.MiuiMultiWindowUtils")
-    private val mWindowsClass = loadClass("android.util.MiuiMultiWindowAdapter")
+    private val mSettingsClass by lazy { loadClass("com.android.server.wm.WindowManagerService\$SettingsObserver") }
+    private val mWindowsUtilsClass by lazy { loadClass("android.util.MiuiMultiWindowUtils") }
+    private val mWindowsClass by lazy { loadClass("android.util.MiuiMultiWindowAdapter") }
 
     override fun init() {
         try {
