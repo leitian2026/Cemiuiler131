@@ -24,7 +24,10 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XSharedPreferences;
+import de.robv.android.xposed.XposedHelpers;
+import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
 import de.robv.android.xposed.XposedBridge;
 
 public class PrefsUtils {
@@ -39,20 +42,31 @@ public class PrefsUtils {
 
 
     /**
-     * 模块端调用：让配置文件对其他进程可读（供 zygote 阶段读取快照）。
-     * 不依赖 New XSharedPreferences，失败时静默忽略。
+     * 模块端调用：去掉配置文件及其目录上“其他用户”的权限位。
+     * 被 hook 进程通过 Provider 读取配置，不需要文件对外可读；
+     * 同时这也是 LSPosed 判断“旧版 NSP 风险”的条件之一（存在其他人可读的 xml）。
      */
-    public static void makePrefsReadable(Context context) {
+    public static void makePrefsPrivate(Context context) {
         try {
             Context protectedContext = Helpers.getProtectedContext(context);
             File dataDir = protectedContext.getDataDir();
             File prefsDir = new File(dataDir, "shared_prefs");
-            File prefsFile = new File(prefsDir, mPrefsName + ".xml");
-            dataDir.setExecutable(true, false);
-            prefsDir.setExecutable(true, false);
-            prefsDir.setReadable(true, false);
-            if (prefsFile.exists()) prefsFile.setReadable(true, false);
+            stripOthersPermission(dataDir);
+            stripOthersPermission(prefsDir);
+            File[] files = prefsDir.listFiles();
+            if (files != null) for (File file : files) stripOthersPermission(file);
         } catch (Throwable ignored) {
+        }
+    }
+
+    private static void stripOthersPermission(File file) {
+        try {
+            if (!file.exists()) return;
+            String path = file.getAbsolutePath();
+            int mode = android.system.Os.stat(path).st_mode & 07777;
+            if ((mode & 07) != 0) android.system.Os.chmod(path, mode & ~07);
+        } catch (Throwable ignored) {
+            // 不属于本应用的文件改不了，忽略
         }
     }
 
@@ -84,6 +98,9 @@ public class PrefsUtils {
     /** 最近一次读取配置失败/为空的原因，供状态页展示 */
     public static volatile String sLastLoadNote = null;
 
+    /** 配置是从哪个通道读到的（状态页展示用） */
+    public static volatile String sConfigSource = null;
+
     private static String describe(Throwable t) {
         Throwable root = t;
         while (root.getCause() != null && root.getCause() != root) root = root.getCause();
@@ -108,6 +125,7 @@ public class PrefsUtils {
             }
             XposedInit.mPrefsMap.putAll(all);
             sLastLoadNote = null;
+            sConfigSource = "配置文件";
             return true;
         } catch (Throwable t) {
             sLastLoadNote = "读配置文件异常 " + describe(t);
@@ -149,6 +167,7 @@ public class PrefsUtils {
                 }
                 XposedInit.mPrefsMap.putAll(loaded);
                 sLastLoadNote = null;
+                sConfigSource = "Provider call";
                 return LoadResult.LOADED;
             }
             callNote = result == null ? "call 返回 null" : "call 返回失败";
@@ -191,6 +210,7 @@ public class PrefsUtils {
             }
             XposedInit.mPrefsMap.putAll(loaded);
             sLastLoadNote = null;
+            sConfigSource = "Provider query";
             return LoadResult.LOADED;
         } catch (Throwable t) {
             sLastLoadNote = callNote + "；query 异常 " + describe(t);
@@ -201,42 +221,61 @@ public class PrefsUtils {
     }
 
     /**
-     * 保证“先拿到配置，再决定装哪些 hook”。
+     * 保证“先拿到配置，再决定装哪些 hook”，全程不轮询、不定时唤醒：
      * <ul>
-     *   <li>配置已经在 map 里（initZygote 读到了）：直接执行。</li>
-     *   <li>配置文件能读、或 Provider 当场能读到：直接执行（和原来一样在当前线程）。</li>
-     *   <li>Provider 暂时不可用：放到后台线程重试，读到后再执行；超时仍读不到就按默认配置执行一次，
-     *       这样不依赖配置的 hook 仍然会装。</li>
-     *   <li>Provider 可达但确实没有配置（没保存过设置）：直接按默认配置执行，不等待。</li>
+     *   <li>配置已在 map 里、配置文件能读、或 Provider 当场能读到：直接在当前线程执行。</li>
+     *   <li>Provider 可达但确实没有配置（没保存过设置）：直接按默认配置执行。</li>
+     *   <li>Provider 暂时不可用：不重试循环，而是等一个“系统就绪”事件，事件到了只重试一次，
+     *       然后无论成败都执行：system_server 等 AMS.systemReady 完成，
+     *       其他进程等 Application.onCreate 完成。</li>
      * </ul>
-     * task 只会执行一次。
+     * task 保证只执行一次。
      */
-    public static void runWhenPrefsReady(String packageName, Runnable task) {
+    public static void runWhenPrefsReady(LoadPackageParam lpparam, Runnable task) {
         if (XposedInit.mPrefsMap.isEmpty() && !loadFromFile()) {
             LoadResult first = loadAllFromProvider(getSystemContext());
             if (first == LoadResult.FAILED) {
-                // system_server 要等 AMS 就绪后 Provider 才可用，给更长的时间
-                final boolean isSystem = "android".equals(packageName);
-                final int tries = isSystem ? 36 : 10;
-                final long delay = isSystem ? 5000 : 2000;
-                Thread loader = new Thread(() -> {
-                    try {
-                        for (int i = 0; i < tries; i++) {
-                            Thread.sleep(delay);
-                            if (!XposedInit.mPrefsMap.isEmpty()) break;
-                            if (loadFromFile()) break;
-                            if (loadAllFromProvider(getSystemContext()) != LoadResult.FAILED) break;
-                        }
-                    } catch (InterruptedException ignored) {
-                    }
+                final AtomicBoolean done = new AtomicBoolean(false);
+                final Runnable once = () -> {
+                    if (!done.compareAndSet(false, true)) return;
+                    if (XposedInit.mPrefsMap.isEmpty()) loadAllFromProvider(getSystemContext());
                     try {
                         task.run();
                     } catch (Throwable t) {
                         XposedBridge.log("[Cemiuiler][E]: deferred init failed: " + t);
                     }
-                }, "Cemiuiler-PrefsLoader");
-                loader.setDaemon(true);
-                loader.start();
+                };
+                try {
+                    if ("android".equals(lpparam.packageName)) {
+                        Class<?> ams = XposedHelpers.findClassIfExists(
+                            "com.android.server.am.ActivityManagerService", lpparam.classLoader);
+                        if (ams != null && !XposedBridge.hookAllMethods(ams, "systemReady",
+                            new XC_MethodHook() {
+                                @Override
+                                protected void afterHookedMethod(MethodHookParam param) {
+                                    // 不在 system_server 主线程里阻塞等待模块进程，单次后台线程执行
+                                    Thread t = new Thread(once, "Cemiuiler-DeferredInit");
+                                    t.setDaemon(true);
+                                    t.start();
+                                }
+                            }).isEmpty()) {
+                            return;
+                        }
+                    } else {
+                        XposedBridge.hookAllMethods(android.app.Application.class, "onCreate",
+                            new XC_MethodHook() {
+                                @Override
+                                protected void afterHookedMethod(MethodHookParam param) {
+                                    once.run();
+                                }
+                            });
+                        return;
+                    }
+                } catch (Throwable t) {
+                    XposedBridge.log("[Cemiuiler][E]: cannot defer init: " + t);
+                }
+                // 挂不上等待事件：不能让 hook 永远不装，退回立即执行
+                once.run();
                 return;
             }
         }
