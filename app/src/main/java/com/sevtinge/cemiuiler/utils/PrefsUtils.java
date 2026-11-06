@@ -8,6 +8,7 @@ import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Looper;
 
 import com.sevtinge.cemiuiler.XposedInit;
 import com.sevtinge.cemiuiler.provider.SharedPrefsProvider;
@@ -18,6 +19,7 @@ import org.json.JSONArray;
 import java.io.File;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
@@ -220,62 +222,121 @@ public class PrefsUtils {
         }
     }
 
+    // ---- “系统就绪”一次性事件：配置延后安装、状态上报共用，全程不轮询 ----
+    // 就绪 = 本进程主线程第一次空闲（system_server 即开机初始化结束进入循环后）。
+
+    private static final class ReadyTask {
+        final Runnable task;
+        final boolean inline;
+
+        ReadyTask(Runnable task, boolean inline) {
+            this.task = task;
+            this.inline = inline;
+        }
+    }
+
+    private static final Object sReadyLock = new Object();
+    private static final List<ReadyTask> sReadyTasks = new ArrayList<>();
+    private static boolean sReady = false;
+    private static boolean sReadyHooked = false;
+    private static volatile boolean sIsSystemServer = false;
+
+    /**
+     * 等“系统就绪”后执行 task，只执行一次。
+     *
+     * @param inline true：就绪回调所在的主线程里直接执行（system_server 里仍放后台线程，避免阻塞系统主线程）；
+     *               false：总是放到后台线程。
+     *               已经就绪时一律立即放到后台线程。
+     */
+    public static void runWhenSystemReady(Runnable task, boolean inline) {
+        boolean ready;
+        boolean needHook = false;
+        synchronized (sReadyLock) {
+            ready = sReady;
+            if (!ready) {
+                sReadyTasks.add(new ReadyTask(task, inline));
+                if (!sReadyHooked) {
+                    sReadyHooked = true;
+                    needHook = true;
+                }
+            }
+        }
+        if (ready) {
+            startReadyThread(java.util.Collections.singletonList(task));
+            return;
+        }
+        if (needHook && !watchMainLooperIdle()) {
+            // 挂不上等待事件：不能让任务永远不执行，退回立即在后台执行
+            markReady(false);
+        }
+    }
+
+    private static boolean watchMainLooperIdle() {
+        try {
+            Looper main = Looper.getMainLooper();
+            if (main == null) return false;
+            main.getQueue().addIdleHandler(() -> {
+                markReady(true);
+                return false; // 只触发一次
+            });
+            return true;
+        } catch (Throwable t) {
+            XposedBridge.log("[Cemiuiler][E]: cannot watch main looper idle: " + t);
+            return false;
+        }
+    }
+
+    private static void markReady(boolean onMainThread) {
+        List<ReadyTask> tasks;
+        synchronized (sReadyLock) {
+            if (sReady && sReadyTasks.isEmpty()) return;
+            sReady = true;
+            tasks = new ArrayList<>(sReadyTasks);
+            sReadyTasks.clear();
+        }
+        for (ReadyTask t : tasks) {
+            if (t.inline && onMainThread && !sIsSystemServer) {
+                runSafely(t.task);
+            } else {
+                startReadyThread(java.util.Collections.singletonList(t.task));
+            }
+        }
+    }
+
+    private static void startReadyThread(List<Runnable> tasks) {
+        Thread thread = new Thread(() -> {
+            for (Runnable r : tasks) runSafely(r);
+        }, "Cemiuiler-Ready");
+        thread.setDaemon(true);
+        thread.start();
+    }
+
+    private static void runSafely(Runnable r) {
+        try {
+            r.run();
+        } catch (Throwable t) {
+            XposedBridge.log("[Cemiuiler][E]: deferred task failed: " + t);
+        }
+    }
+
     /**
      * 保证“先拿到配置，再决定装哪些 hook”，全程不轮询、不定时唤醒：
      * <ul>
      *   <li>配置已在 map 里、配置文件能读、或 Provider 当场能读到：直接在当前线程执行。</li>
      *   <li>Provider 可达但确实没有配置（没保存过设置）：直接按默认配置执行。</li>
-     *   <li>Provider 暂时不可用：不重试循环，而是等一个“系统就绪”事件，事件到了只重试一次，
-     *       然后无论成败都执行：system_server 等 AMS.systemReady 完成，
-     *       其他进程等 Application.onCreate 完成。</li>
+     *   <li>Provider 暂时不可用：等“系统就绪”事件，事件到了只重试一次，然后无论成败都执行。</li>
      * </ul>
      * task 保证只执行一次。
      */
     public static void runWhenPrefsReady(LoadPackageParam lpparam, Runnable task) {
+        sIsSystemServer = "android".equals(lpparam.packageName);
         if (XposedInit.mPrefsMap.isEmpty() && !loadFromFile()) {
             LoadResult first = loadAllFromProvider(getSystemContext());
             if (first == LoadResult.FAILED) {
-                final AtomicBoolean done = new AtomicBoolean(false);
-                final Runnable once = () -> {
-                    if (!done.compareAndSet(false, true)) return;
+                runWhenSystemReady(() -> {
                     if (XposedInit.mPrefsMap.isEmpty()) loadAllFromProvider(getSystemContext());
-                    try {
-                        task.run();
-                    } catch (Throwable t) {
-                        XposedBridge.log("[Cemiuiler][E]: deferred init failed: " + t);
-                    }
-                };
-                try {
-                    if ("android".equals(lpparam.packageName)) {
-                        Class<?> ams = XposedHelpers.findClassIfExists(
-                            "com.android.server.am.ActivityManagerService", lpparam.classLoader);
-                        if (ams != null && !XposedBridge.hookAllMethods(ams, "systemReady",
-                            new XC_MethodHook() {
-                                @Override
-                                protected void afterHookedMethod(MethodHookParam param) {
-                                    // 不在 system_server 主线程里阻塞等待模块进程，单次后台线程执行
-                                    Thread t = new Thread(once, "Cemiuiler-DeferredInit");
-                                    t.setDaemon(true);
-                                    t.start();
-                                }
-                            }).isEmpty()) {
-                            return;
-                        }
-                    } else {
-                        XposedBridge.hookAllMethods(android.app.Application.class, "onCreate",
-                            new XC_MethodHook() {
-                                @Override
-                                protected void afterHookedMethod(MethodHookParam param) {
-                                    once.run();
-                                }
-                            });
-                        return;
-                    }
-                } catch (Throwable t) {
-                    XposedBridge.log("[Cemiuiler][E]: cannot defer init: " + t);
-                }
-                // 挂不上等待事件：不能让 hook 永远不装，退回立即执行
-                once.run();
+                    task.run();
+                }, true);
                 return;
             }
         }
