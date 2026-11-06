@@ -1,14 +1,13 @@
 package com.sevtinge.cemiuiler.module.hook.systemframework.corepatch;
 
 import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XSharedPreferences;
 
 public class ReturnConstant extends XC_MethodHook {
-    private final XSharedPreferences prefs;
+    private final CorePatchPrefs prefs;
     private final String prefsKey;
     private final Object value;
 
-    public ReturnConstant(XSharedPreferences prefs, String prefsKey, Object value) {
+    public ReturnConstant(CorePatchPrefs prefs, String prefsKey, Object value) {
         this.prefs = prefs;
         this.prefsKey = prefsKey;
         this.value = value;
