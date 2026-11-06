@@ -6,6 +6,7 @@ import android.content.SharedPreferences;
 import android.database.ContentObserver;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.Bundle;
 import android.os.Handler;
 
 import com.sevtinge.cemiuiler.XposedInit;
@@ -16,12 +17,14 @@ import org.json.JSONArray;
 
 import java.io.File;
 import java.lang.reflect.Field;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import de.robv.android.xposed.XSharedPreferences;
 import de.robv.android.xposed.XposedBridge;
 
 public class PrefsUtils {
@@ -66,18 +69,101 @@ public class PrefsUtils {
         }
     }
 
+    /** Provider.call 方法名：导出全部配置 */
+    public static final String METHOD_GET_ALL = "get_all";
+
+    public enum LoadResult {
+        /** 读到了配置 */
+        LOADED,
+        /** 渠道可达，但模块那边确实没有任何配置（没保存过设置） */
+        EMPTY,
+        /** 渠道不可用（Provider 还没就绪、被拦截、异常等），值得重试 */
+        FAILED
+    }
+
+    /** 最近一次读取配置失败/为空的原因，供状态页展示 */
+    public static volatile String sLastLoadNote = null;
+
+    private static String describe(Throwable t) {
+        Throwable root = t;
+        while (root.getCause() != null && root.getCause() != root) root = root.getCause();
+        return root.getClass().getSimpleName() + ": " + root.getMessage();
+    }
+
+    /**
+     * 直接读取模块的配置文件（不经过 LSPosed 的 New XSharedPreferences）。
+     * 被 hook 进程没有权限时读不到，返回 false。
+     */
+    public static boolean loadFromFile() {
+        try {
+            File file = new File(mPrefsFile);
+            if (!file.canRead()) {
+                sLastLoadNote = "配置文件不可读";
+                return false;
+            }
+            Map<String, ?> all = new XSharedPreferences(file).getAll();
+            if (all == null || all.isEmpty()) {
+                sLastLoadNote = "配置文件为空";
+                return false;
+            }
+            XposedInit.mPrefsMap.putAll(all);
+            sLastLoadNote = null;
+            return true;
+        } catch (Throwable t) {
+            sLastLoadNote = "读配置文件异常 " + describe(t);
+            return false;
+        }
+    }
+
     /**
      * 通过模块的 SharedPrefsProvider 一次性读取全部配置并写入 mPrefsMap。
-     *
-     * @return 是否成功读取到配置
+     * 先用 call（状态上报用的就是这个通道），不行再退回 query。
      */
-    public static boolean loadAllFromProvider(Context context) {
-        if (context == null) return false;
+    public static LoadResult loadAllFromProvider(Context context) {
+        if (context == null) {
+            sLastLoadNote = "系统 Context 不可用";
+            return LoadResult.FAILED;
+        }
+        String callNote;
+        try {
+            Uri base = Uri.parse("content://" + SharedPrefsProvider.AUTHORITY);
+            Bundle result = context.getContentResolver().call(base, METHOD_GET_ALL, null, null);
+            if (result != null && result.getBoolean("ok")) {
+                Bundle values = result.getBundle("values");
+                Map<String, Object> loaded = new HashMap<>();
+                if (values != null) {
+                    for (String key : values.keySet()) {
+                        Object v = values.get(key);
+                        if (v instanceof ArrayList) {
+                            Set<String> set = new LinkedHashSet<>();
+                            for (Object o : (ArrayList<?>) v) if (o != null) set.add(o.toString());
+                            loaded.put(key, set);
+                        } else if (v != null) {
+                            loaded.put(key, v);
+                        }
+                    }
+                }
+                if (loaded.isEmpty()) {
+                    sLastLoadNote = "Provider 可达但模块里没有任何配置";
+                    return LoadResult.EMPTY;
+                }
+                XposedInit.mPrefsMap.putAll(loaded);
+                sLastLoadNote = null;
+                return LoadResult.LOADED;
+            }
+            callNote = result == null ? "call 返回 null" : "call 返回失败";
+        } catch (Throwable t) {
+            callNote = "call 异常 " + describe(t);
+        }
+
         Cursor cursor = null;
         try {
             Uri uri = Uri.parse("content://" + SharedPrefsProvider.AUTHORITY + "/all");
             cursor = context.getContentResolver().query(uri, null, null, null, null);
-            if (cursor == null) return false;
+            if (cursor == null) {
+                sLastLoadNote = callNote + "；query 返回 null";
+                return LoadResult.FAILED;
+            }
 
             Map<String, Object> loaded = new HashMap<>();
             while (cursor.moveToNext()) {
@@ -99,50 +185,68 @@ public class PrefsUtils {
                     }
                 }
             }
-            if (loaded.isEmpty()) return false;
+            if (loaded.isEmpty()) {
+                sLastLoadNote = "Provider 可达但模块里没有任何配置";
+                return LoadResult.EMPTY;
+            }
             XposedInit.mPrefsMap.putAll(loaded);
-            return true;
+            sLastLoadNote = null;
+            return LoadResult.LOADED;
         } catch (Throwable t) {
-            return false;
+            sLastLoadNote = callNote + "；query 异常 " + describe(t);
+            return LoadResult.FAILED;
         } finally {
             if (cursor != null) cursor.close();
         }
     }
 
-    private static final AtomicBoolean sPrefsLoaderStarted = new AtomicBoolean(false);
-
     /**
-     * 被 hook 进程启动时配置快照没读到，就通过模块 Provider 兜底读取。
-     * system_server 启动早期 Provider 不可用，放到后台线程里重试，避免阻塞系统启动。
+     * 保证“先拿到配置，再决定装哪些 hook”。
+     * <ul>
+     *   <li>配置已经在 map 里（initZygote 读到了）：直接执行。</li>
+     *   <li>配置文件能读、或 Provider 当场能读到：直接执行（和原来一样在当前线程）。</li>
+     *   <li>Provider 暂时不可用：放到后台线程重试，读到后再执行；超时仍读不到就按默认配置执行一次，
+     *       这样不依赖配置的 hook 仍然会装。</li>
+     *   <li>Provider 可达但确实没有配置（没保存过设置）：直接按默认配置执行，不等待。</li>
+     * </ul>
+     * task 只会执行一次。
      */
-    public static void ensurePrefsLoaded(String packageName) {
-        if (!XposedInit.mPrefsMap.isEmpty()) return;
-        if ("android".equals(packageName)) {
-            if (!sPrefsLoaderStarted.compareAndSet(false, true)) return;
-            Thread loader = new Thread(() -> {
-                for (int i = 0; i < 30 && XposedInit.mPrefsMap.isEmpty(); i++) {
+    public static void runWhenPrefsReady(String packageName, Runnable task) {
+        if (XposedInit.mPrefsMap.isEmpty() && !loadFromFile()) {
+            LoadResult first = loadAllFromProvider(getSystemContext());
+            if (first == LoadResult.FAILED) {
+                // system_server 要等 AMS 就绪后 Provider 才可用，给更长的时间
+                final boolean isSystem = "android".equals(packageName);
+                final int tries = isSystem ? 36 : 10;
+                final long delay = isSystem ? 5000 : 2000;
+                Thread loader = new Thread(() -> {
                     try {
-                        Thread.sleep(5000);
-                    } catch (InterruptedException e) {
-                        return;
+                        for (int i = 0; i < tries; i++) {
+                            Thread.sleep(delay);
+                            if (!XposedInit.mPrefsMap.isEmpty()) break;
+                            if (loadFromFile()) break;
+                            if (loadAllFromProvider(getSystemContext()) != LoadResult.FAILED) break;
+                        }
+                    } catch (InterruptedException ignored) {
                     }
-                    loadAllFromProvider(getSystemContext());
-                }
-            }, "Cemiuiler-PrefsLoader");
-            loader.setDaemon(true);
-            loader.start();
-        } else {
-            loadAllFromProvider(getSystemContext());
+                    try {
+                        task.run();
+                    } catch (Throwable t) {
+                        XposedBridge.log("[Cemiuiler][E]: deferred init failed: " + t);
+                    }
+                }, "Cemiuiler-PrefsLoader");
+                loader.setDaemon(true);
+                loader.start();
+                return;
+            }
         }
+        task.run();
     }
 
     public static SharedPreferences getSharedPrefs(Context context, boolean multiProcess) {
         context = Helpers.getProtectedContext(context);
-        try {
-            return context.getSharedPreferences(mPrefsName, multiProcess ? Context.MODE_MULTI_PROCESS | Context.MODE_WORLD_READABLE : Context.MODE_WORLD_READABLE);
-        } catch (Throwable t) {
-            return context.getSharedPreferences(mPrefsName, multiProcess ? Context.MODE_MULTI_PROCESS | Context.MODE_PRIVATE : Context.MODE_PRIVATE);
-        }
+        // 不再使用 MODE_WORLD_READABLE（已废弃）；被 hook 进程通过 Provider 读取配置
+        return context.getSharedPreferences(mPrefsName, multiProcess ? Context.MODE_MULTI_PROCESS | Context.MODE_PRIVATE : Context.MODE_PRIVATE);
     }
 
     public static SharedPreferences getSharedPrefs(Context context) {
