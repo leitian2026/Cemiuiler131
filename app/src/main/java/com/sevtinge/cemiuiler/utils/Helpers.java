@@ -135,20 +135,6 @@ public class Helpers {
     }
 
 
-    // Permissions 权限：只收紧，不再放开（配置通过 Provider 传递）
-    public static void fixPermissionsAsync(Context context) {
-        java.util.concurrent.ExecutorService executor = Executors.newSingleThreadExecutor();
-        executor.execute(() -> {
-            try {
-                Thread.sleep(500);
-            } catch (Throwable ignore) {
-            }
-            PrefsUtils.makePrefsPrivate(context);
-        });
-        // 任务提交后就关闭执行器，否则每次调用都会残留一个空闲线程
-        executor.shutdown();
-    }
-
     private static String getCallerMethod() {
         StackTraceElement[] stackTrace = Thread.currentThread().getStackTrace();
         for (StackTraceElement el : stackTrace)
