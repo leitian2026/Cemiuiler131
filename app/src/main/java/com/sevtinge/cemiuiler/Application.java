@@ -24,17 +24,17 @@ public class Application extends android.app.Application {
     }
 
     /**
-     * 配置每次写入后文件权限会被重置，这里在写入落盘后重新放开读取权限，
-     * 以便 zygote 阶段读取配置快照（不再依赖 New XSharedPreferences）。
+     * 配置每次写入后重新收紧文件权限，不让其他应用读写模块配置。
      */
     private void setupPrefsPermission() {
         final Handler handler = new Handler(Looper.getMainLooper());
-        final Runnable fix = () -> PrefsUtils.makePrefsReadable(this);
-        PrefsUtils.makePrefsReadable(this);
+        final Runnable fix = () -> PrefsUtils.makePrefsPrivate(this);
+        PrefsUtils.makePrefsPrivate(this);
         if (PrefsUtils.mSharedPreferences == null) return;
         sPrefsListener = (prefs, key) -> {
+            // 连续多次修改只执行最后一轮，不堆积任务
+            handler.removeCallbacks(fix);
             handler.postDelayed(fix, 500);
-            handler.postDelayed(fix, 3000);
         };
         PrefsUtils.mSharedPreferences.registerOnSharedPreferenceChangeListener(sPrefsListener);
     }
