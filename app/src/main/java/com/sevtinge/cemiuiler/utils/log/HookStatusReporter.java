@@ -85,10 +85,16 @@ public final class HookStatusReporter {
         PrefsUtils.runWhenSystemReady(() -> {
             try {
                 Thread.sleep(FIRST_DELAY_MS);
+                boolean sent = false;
                 for (int i = 0; i < MAX_TRIES; i++) {
-                    if (flush()) break;
+                    if (flush()) {
+                        sent = true;
+                        break;
+                    }
                     if (i + 1 < MAX_TRIES) Thread.sleep(RETRY_DELAY_MS);
                 }
+                // 上报成功说明模块 Provider 此刻可用：启动时没读到配置的进程在这里补读一次
+                if (sent) PrefsUtils.retryLateInit();
             } catch (InterruptedException ignored) {
             } catch (Throwable ignored) {
             } finally {
@@ -128,7 +134,7 @@ public final class HookStatusReporter {
             // 配置通道自检：被 hook 进程内读不到配置时，所有开关都会回退为默认值
             if (!PrefsUtils.sConfigLoaded) {
                 String why = PrefsUtils.sLastLoadNote;
-                toSend.add("fail|[ConfigPrefs]|配置为空，设置可能未生效" + (why == null ? "" : "；" + clean(why, 100)));
+                toSend.add("fail|[ConfigPrefs]|配置为空，设置可能未生效" + (why == null ? "" : "；" + clean(why, 160)));
             } else {
                 String src = PrefsUtils.sConfigSource;
                 toSend.add("ok|[ConfigPrefs]|" + (src == null ? "" : clean(src, 40)));
