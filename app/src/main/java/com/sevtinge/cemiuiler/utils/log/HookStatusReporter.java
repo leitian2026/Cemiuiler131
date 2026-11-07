@@ -126,7 +126,7 @@ public final class HookStatusReporter {
             List<String> entries = copies.get(i);
             ArrayList<String> toSend = new ArrayList<>(entries);
             // 配置通道自检：被 hook 进程内读不到配置时，所有开关都会回退为默认值
-            if (XposedInit.mPrefsMap.isEmpty()) {
+            if (!PrefsUtils.sConfigLoaded) {
                 String why = PrefsUtils.sLastLoadNote;
                 toSend.add("fail|[ConfigPrefs]|配置为空，设置可能未生效" + (why == null ? "" : "；" + clean(why, 100)));
             } else {
