@@ -1,6 +1,9 @@
 package com.sevtinge.cemiuiler.utils;
 
 import android.annotation.SuppressLint;
+import android.content.BroadcastReceiver;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.database.ContentObserver;
@@ -108,6 +111,58 @@ public class PrefsUtils {
 
     /** 启动时没读到配置、按默认配置装过 hook 的进程：通道恢复后补跑用 */
     private static volatile Runnable sLateInit = null;
+
+    private static final java.util.concurrent.atomic.AtomicBoolean sLateReceiverRegistered =
+        new java.util.concurrent.atomic.AtomicBoolean(false);
+    private static volatile int sLateAttempts = 0;
+
+    private static Context getAppContext() {
+        try {
+            Class<?> activityThread = Class.forName("android.app.ActivityThread");
+            return (Context) activityThread.getMethod("currentApplication").invoke(null);
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    /**
+     * 启动时 Provider 暂时不可用（例如桌面开机最早期）：不轮询，而是等系统事件
+     * （开机完成、解锁、亮屏、用户在场）再重试读配置并补装；读到配置或重试 6 次后自动注销。
+     */
+    private static void registerLateRetryReceiver() {
+        if (sIsSystemServer) return;
+        final Context ctx = getAppContext();
+        if (ctx == null || !sLateReceiverRegistered.compareAndSet(false, true)) return;
+        try {
+            BroadcastReceiver receiver = new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context context, Intent intent) {
+                    final BroadcastReceiver self = this;
+                    Thread thread = new Thread(() -> {
+                        sLateAttempts++;
+                        retryLateInit();
+                        com.sevtinge.cemiuiler.utils.log.HookStatusReporter.retryPending();
+                        if (sConfigLoaded || sLateAttempts >= 6) {
+                            try {
+                                ctx.unregisterReceiver(self);
+                            } catch (Throwable ignored) {
+                            }
+                        }
+                    }, "Cemiuiler-LateRetry");
+                    thread.setDaemon(true);
+                    thread.start();
+                }
+            };
+            IntentFilter filter = new IntentFilter();
+            filter.addAction(Intent.ACTION_BOOT_COMPLETED);
+            filter.addAction(Intent.ACTION_USER_UNLOCKED);
+            filter.addAction(Intent.ACTION_SCREEN_ON);
+            filter.addAction(Intent.ACTION_USER_PRESENT);
+            ctx.registerReceiver(receiver, filter);
+        } catch (Throwable t) {
+            XposedBridge.log("[Cemiuiler][E]: cannot register late retry receiver: " + t);
+        }
+    }
 
     /**
      * 由状态上报在“通道已被证明可用”（上报成功）后调用：如果启动时没读到配置，
@@ -378,7 +433,10 @@ public class PrefsUtils {
                 runWhenSystemReady(() -> {
                     if (XposedInit.mPrefsMap.isEmpty()) loadAllFromProvider(getSystemContext());
                     // 还是没读到：先按默认配置装一遍，并记下来，通道恢复后补跑一次（只装还没装的）
-                    if (!sConfigLoaded) sLateInit = task;
+                    if (!sConfigLoaded) {
+                        sLateInit = task;
+                        registerLateRetryReceiver();
+                    }
                     task.run();
                 }, true);
                 return;
