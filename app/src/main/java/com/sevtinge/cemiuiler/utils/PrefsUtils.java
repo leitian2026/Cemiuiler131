@@ -106,10 +106,45 @@ public class PrefsUtils {
     /** 是否真的从某个通道读到过配置（不能用 mPrefsMap 是否为空判断：hook 运行时也会往里写值） */
     public static volatile boolean sConfigLoaded = false;
 
+    /** 启动时没读到配置、按默认配置装过 hook 的进程：通道恢复后补跑用 */
+    private static volatile Runnable sLateInit = null;
+
+    /**
+     * 由状态上报在“通道已被证明可用”（上报成功）后调用：如果启动时没读到配置，
+     * 现在再读一次，读到就补跑一遍初始化，只安装之前因配置缺失而没装的 hook。事件驱动，不轮询。
+     */
+    public static void retryLateInit() {
+        Runnable task = sLateInit;
+        if (task == null || sConfigLoaded) return;
+        if (loadAllFromProvider(getSystemContext()) != LoadResult.LOADED) return;
+        sLateInit = null;
+        com.sevtinge.cemiuiler.module.base.BaseModule.sSkipInstalled = true;
+        try {
+            task.run();
+        } catch (Throwable t) {
+            XposedBridge.log("[Cemiuiler][E]: late init failed: " + t);
+        } finally {
+            com.sevtinge.cemiuiler.module.base.BaseModule.sSkipInstalled = false;
+        }
+    }
+
+    private static String firstLine(String message) {
+        if (message == null) return "";
+        int nl = message.indexOf('\n');
+        String line = (nl >= 0 ? message.substring(0, nl) : message).trim();
+        return line.length() > 80 ? line.substring(0, 80) : line;
+    }
+
     private static String describe(Throwable t) {
+        // 跨进程异常的最底层是系统附加的 “Remote stack trace” 占位，没有信息；优先显示最外层的真实异常
+        String text = t.getClass().getSimpleName() + ": " + firstLine(t.getMessage());
         Throwable root = t;
         while (root.getCause() != null && root.getCause() != root) root = root.getCause();
-        return root.getClass().getSimpleName() + ": " + root.getMessage();
+        String rootMsg = root.getMessage();
+        if (root != t && rootMsg != null && !rootMsg.startsWith("Remote stack trace")) {
+            text += " <- " + root.getClass().getSimpleName() + ": " + firstLine(rootMsg);
+        }
+        return text;
     }
 
     /**
@@ -342,6 +377,8 @@ public class PrefsUtils {
             if (first != LoadResult.LOADED) {
                 runWhenSystemReady(() -> {
                     if (XposedInit.mPrefsMap.isEmpty()) loadAllFromProvider(getSystemContext());
+                    // 还是没读到：先按默认配置装一遍，并记下来，通道恢复后补跑一次（只装还没装的）
+                    if (!sConfigLoaded) sLateInit = task;
                     task.run();
                 }, true);
                 return;
