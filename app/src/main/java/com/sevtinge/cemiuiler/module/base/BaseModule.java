@@ -26,8 +26,16 @@ public abstract class BaseModule implements IXposedHook {
         initHook(baseHook, true);
     }
 
+    // 已经安装过的 hook（包名|类名）。配置晚到、需要补跑一遍初始化时，用它跳过已装的，避免重复 hook
+    private static final java.util.Set<String> sInstalledHooks =
+        java.util.Collections.synchronizedSet(new java.util.HashSet<>());
+    public static volatile boolean sSkipInstalled = false;
+
     public void initHook(BaseHook baseHook, boolean isInit) {
         if (isInit) {
+            String pkg = mLoadPackageParam == null ? "" : mLoadPackageParam.packageName;
+            boolean first = sInstalledHooks.add(pkg + "|" + baseHook.getClass().getName());
+            if (!first && sSkipInstalled) return;
             baseHook.onCreate(mLoadPackageParam);
         }
     }
