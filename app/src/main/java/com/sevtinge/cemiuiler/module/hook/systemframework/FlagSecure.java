@@ -39,6 +39,8 @@ public class FlagSecure extends BaseHook {
     // 本次实际去优化的方法数，上报到状态页，便于判断开销和缩小范围
     private int deoptCount = 0;
     private boolean deoptFailed = false;
+    private boolean secureHooked = false;
+    private Throwable secureError = null;
 
     private void deoptimizeMethod(Class<?> c, String n) throws InvocationTargetException, IllegalAccessException {
         for (Method m : c.getDeclaredMethods()) {
@@ -68,7 +70,9 @@ public class FlagSecure extends BaseHook {
                         windowsState,
                         XC_MethodReplacement.returnConstant(false));
                 }
+                secureHooked = true;
             } catch (Throwable t) {
+                secureError = t;
                 XposedBridge.log(t);
             }
             try {
@@ -103,8 +107,11 @@ public class FlagSecure extends BaseHook {
                 deoptFailed = true;
             }
             // 状态页里显示实际去优化了多少个方法（失败时是失败前已完成的数量）
+            // 状态页里写明关键一步（拦截 isSecureLocked）是否成功；以前异常被吞掉，成功失败都显示正常
             HookStatusReporter.record(lpparam.packageName, lpparam.processName,
-                "FlagSecure 去优化" + deoptCount + "个方法" + (deoptFailed ? "(中途异常)" : ""), true, null);
+                "FlagSecure isSecureLocked" + (secureHooked ? "已拦截" : "未拦截")
+                    + " 去优化" + deoptCount + "个方法" + (deoptFailed ? "(中途异常)" : ""),
+                secureHooked && !deoptFailed, secureError);
         }
     }
 }
