@@ -219,7 +219,14 @@ public class Home extends BaseModule {
 
         // 其他
         initHook(new HomeMode(), mPrefsMap.getStringAsInt("home_other_home_mode", 0) > 0);
-        initHook(AlwaysShowStatusClock.INSTANCE, mPrefsMap.getBoolean("home_other_show_clock"));
+        boolean showStatusClock = mPrefsMap.getBoolean("home_other_show_clock");
+        if (!showStatusClock) {
+            // 开关在本进程读到的是关：写进状态页，方便区分“没启用”和“装失败”
+            com.sevtinge.cemiuiler.utils.log.HookStatusReporter.record(
+                mLoadPackageParam.packageName, mLoadPackageParam.processName,
+                "AlwaysShowStatusClock(开关读到=关,未启用)", true, null);
+        }
+        initHook(AlwaysShowStatusClock.INSTANCE, showStatusClock);
         initHook(new InfiniteScroll(), mPrefsMap.getBoolean("home_other_infinite_scroll"));
         initHook(new FreeformShortcutMenu(), (mPrefsMap.getBoolean("home_other_freeform_shortcut_menu") || (mPrefsMap.getBoolean("home_other_tasks_shortcut_menu"))));
         initHook(new UserPresentAnimation(), mPrefsMap.getBoolean("home_other_user_present_animation"));
