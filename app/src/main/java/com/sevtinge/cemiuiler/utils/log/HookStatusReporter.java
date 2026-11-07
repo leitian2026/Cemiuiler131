@@ -78,6 +78,19 @@ public final class HookStatusReporter {
     }
 
     // 调用时已持有 HookStatusReporter.class 锁
+    /**
+     * 由系统事件（开机完成、解锁、亮屏）触发：把还没送达的状态重新发一遍。
+     * 配置状态可能已经变化，所以已发送过的也强制重发一次。
+     */
+    public static void retryPending() {
+        synchronized (HookStatusReporter.class) {
+            if (sPending.isEmpty()) return;
+            for (Pending pending : sPending.values()) pending.sentCount = -1;
+            sDirty = true;
+            schedule();
+        }
+    }
+
     private static void schedule() {
         if (sScheduled) return;
         sScheduled = true;
