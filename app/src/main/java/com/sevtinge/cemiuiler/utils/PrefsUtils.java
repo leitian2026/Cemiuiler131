@@ -103,6 +103,9 @@ public class PrefsUtils {
     /** 配置是从哪个通道读到的（状态页展示用） */
     public static volatile String sConfigSource = null;
 
+    /** 是否真的从某个通道读到过配置（不能用 mPrefsMap 是否为空判断：hook 运行时也会往里写值） */
+    public static volatile boolean sConfigLoaded = false;
+
     private static String describe(Throwable t) {
         Throwable root = t;
         while (root.getCause() != null && root.getCause() != root) root = root.getCause();
@@ -128,6 +131,7 @@ public class PrefsUtils {
             XposedInit.mPrefsMap.putAll(all);
             sLastLoadNote = null;
             sConfigSource = "配置文件";
+            sConfigLoaded = true;
             return true;
         } catch (Throwable t) {
             sLastLoadNote = "读配置文件异常 " + describe(t);
@@ -170,6 +174,7 @@ public class PrefsUtils {
                 XposedInit.mPrefsMap.putAll(loaded);
                 sLastLoadNote = null;
                 sConfigSource = "Provider call";
+            sConfigLoaded = true;
                 return LoadResult.LOADED;
             }
             callNote = result == null ? "call 返回 null" : "call 返回失败";
@@ -213,6 +218,7 @@ public class PrefsUtils {
             XposedInit.mPrefsMap.putAll(loaded);
             sLastLoadNote = null;
             sConfigSource = "Provider query";
+            sConfigLoaded = true;
             return LoadResult.LOADED;
         } catch (Throwable t) {
             sLastLoadNote = callNote + "；query 异常 " + describe(t);
@@ -323,8 +329,8 @@ public class PrefsUtils {
      * 保证“先拿到配置，再决定装哪些 hook”，全程不轮询、不定时唤醒：
      * <ul>
      *   <li>配置已在 map 里、配置文件能读、或 Provider 当场能读到：直接在当前线程执行。</li>
-     *   <li>Provider 可达但确实没有配置（没保存过设置）：直接按默认配置执行。</li>
-     *   <li>Provider 暂时不可用：等“系统就绪”事件，事件到了只重试一次，然后无论成败都执行。</li>
+     *   <li>没读到配置（Provider 暂时不可用，或可达但是空）：等“系统就绪”事件，事件到了只重试一次，
+     *       然后无论成败都执行（确实没保存过设置时就按默认配置）。</li>
      * </ul>
      * task 保证只执行一次。
      */
@@ -332,7 +338,8 @@ public class PrefsUtils {
         sIsSystemServer = "android".equals(lpparam.packageName);
         if (XposedInit.mPrefsMap.isEmpty() && !loadFromFile()) {
             LoadResult first = loadAllFromProvider(getSystemContext());
-            if (first == LoadResult.FAILED) {
+            // 没读到（含“可达但是空”：用户有设置时这通常是时序问题）：等系统就绪后再试一次
+            if (first != LoadResult.LOADED) {
                 runWhenSystemReady(() -> {
                     if (XposedInit.mPrefsMap.isEmpty()) loadAllFromProvider(getSystemContext());
                     task.run();
