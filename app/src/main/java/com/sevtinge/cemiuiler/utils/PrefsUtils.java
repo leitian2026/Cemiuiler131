@@ -109,6 +109,32 @@ public class PrefsUtils {
     /** 是否真的从某个通道读到过配置（不能用 mPrefsMap 是否为空判断：hook 运行时也会往里写值） */
     public static volatile boolean sConfigLoaded = false;
 
+    /** 本进程读到的配置的签名（只含 prefs_key_ 开头的设置），状态页用它判断进程用的是不是最新设置 */
+    public static volatile String sConfigSignature = null;
+
+    /**
+     * 配置签名：进程端和模块端用同一个算法，对比就能知道“这个进程读到的设置，现在是否已经过期”。
+     */
+    public static String signatureOf(Map<String, ?> map) {
+        java.util.TreeMap<String, String> sorted = new java.util.TreeMap<>();
+        for (Map.Entry<String, ?> entry : map.entrySet()) {
+            String key = entry.getKey();
+            if (key == null || !key.startsWith("prefs_key_")) continue;
+            Object value = entry.getValue();
+            String text;
+            if (value instanceof Set) {
+                List<String> items = new ArrayList<>();
+                for (Object o : (Set<?>) value) items.add(String.valueOf(o));
+                java.util.Collections.sort(items);
+                text = items.toString();
+            } else {
+                text = String.valueOf(value);
+            }
+            sorted.put(key, text);
+        }
+        return Integer.toHexString(sorted.toString().hashCode());
+    }
+
     /** 启动时没读到配置、按默认配置装过 hook 的进程：通道恢复后补跑用 */
     private static volatile Runnable sLateInit = null;
 
@@ -218,6 +244,7 @@ public class PrefsUtils {
                 sLastLoadNote = "配置文件为空";
                 return false;
             }
+            sConfigSignature = signatureOf(all);
             XposedInit.mPrefsMap.putAll(all);
             sLastLoadNote = null;
             sConfigSource = "配置文件";
@@ -261,6 +288,7 @@ public class PrefsUtils {
                     sLastLoadNote = "Provider 可达但模块里没有任何配置";
                     return LoadResult.EMPTY;
                 }
+                sConfigSignature = signatureOf(loaded);
                 XposedInit.mPrefsMap.putAll(loaded);
                 sLastLoadNote = null;
                 sConfigSource = "Provider call";
@@ -305,6 +333,7 @@ public class PrefsUtils {
                 sLastLoadNote = "Provider 可达但模块里没有任何配置";
                 return LoadResult.EMPTY;
             }
+            sConfigSignature = signatureOf(loaded);
             XposedInit.mPrefsMap.putAll(loaded);
             sLastLoadNote = null;
             sConfigSource = "Provider query";
