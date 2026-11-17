@@ -36,13 +36,13 @@
         android:title="@string/system_framework_volume_media_steps"
         android:summary="@string/system_framework_volume_media_steps_desc" />
 
+    <!-- Keep app:maxValue in sync with EarlyVolumeMediaSteps.MAX_STEPS. -->
     <SeekBarPreferenceEx
         android:layout="@layout/preference_seekbar_no_padding"
         android:key="prefs_key_system_framework_volume_media_steps"
         android:dependency="prefs_key_system_framework_volume_media_steps_enable"
         android:defaultValue="15"
         app:defaultValueText="@string/array_default"
-        <!-- Keep in sync with EarlyVolumeMediaSteps.MAX_STEPS. -->
         app:maxValue="40"
         app:minValue="15"
         app:stepValue="1"
