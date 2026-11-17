@@ -4,6 +4,7 @@ import android.system.Os
 import com.sevtinge.cemiuiler.utils.PrefsUtils
 import com.sevtinge.cemiuiler.utils.log.HookStatusReporter
 import de.robv.android.xposed.XC_MethodHook
+import de.robv.android.xposed.XC_MethodHook.MethodHookParam
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import java.io.File
@@ -83,7 +84,9 @@ object EarlyVolumeMediaSteps {
         val syncError = syncCache(desired)
 
         if (enabled && statusReported.compareAndSet(false, true)) {
-            val error = syncError ?: installError
+            val error = syncError ?: installError ?: if (!installSucceeded) {
+                IllegalStateException("early AudioService hook was not installed")
+            } else null
             HookStatusReporter.record(
                 "android",
                 "android",
