@@ -3,6 +3,7 @@ package com.sevtinge.cemiuiler
 import com.github.kyuubiran.ezxhelper.EzXHelper
 import com.sevtinge.cemiuiler.module.app.SystemFrameworkForCorePatch
 import com.sevtinge.cemiuiler.module.base.BaseXposedInit
+import com.sevtinge.cemiuiler.module.hook.systemframework.EarlyVolumeMediaSteps
 import com.sevtinge.cemiuiler.module.hook.home.title.EnableIconMonetColor
 import com.sevtinge.cemiuiler.module.hook.securitycenter.SidebarLineCustom
 import com.sevtinge.cemiuiler.module.hook.settings.VolumeSeparateControlForSettings
@@ -40,6 +41,11 @@ class XposedInit : BaseXposedInit(), IXposedHookInitPackageResources {
             initHandleLoadPackage(lpparam)
             setLogTag(TAG)
             setToastTag(TAG)
+        }
+
+        // system_server 中 AudioService 初始化早于配置 Provider 就绪，必须先安装媒体音量早期钩子。
+        if (lpparam.packageName == "android" && lpparam.processName == "android") {
+            EarlyVolumeMediaSteps.install(lpparam.classLoader)
         }
 
         // 先拿到配置再决定装哪些 hook；Provider 暂时不可用时延后安装（只会执行一次）
