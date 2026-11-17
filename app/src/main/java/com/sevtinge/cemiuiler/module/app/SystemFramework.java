@@ -28,7 +28,7 @@ import com.sevtinge.cemiuiler.module.hook.systemframework.UseOriginalAnimation;
 import com.sevtinge.cemiuiler.module.hook.systemframework.VolumeDefaultStream;
 import com.sevtinge.cemiuiler.module.hook.systemframework.VolumeDisableSafe;
 import com.sevtinge.cemiuiler.module.hook.systemframework.VolumeFirstPress;
-import com.sevtinge.cemiuiler.module.hook.systemframework.VolumeMediaSteps;
+import com.sevtinge.cemiuiler.module.hook.systemframework.EarlyVolumeMediaSteps;
 import com.sevtinge.cemiuiler.module.hook.systemframework.VolumeSeparateControl;
 import com.sevtinge.cemiuiler.module.hook.systemframework.VolumeSteps;
 import com.sevtinge.cemiuiler.module.hook.systemframework.corepatch.BypassSignCheckForT;
@@ -67,12 +67,17 @@ public class SystemFramework extends BaseModule {
         safeInit("OpenAppInFreeForm", () -> initHook(new OpenAppInFreeForm(), mPrefsMap.getBoolean("system_framework_freeform_jump")));
         // initHook(new OpenAppInFreeForm(), mPrefsMap.getBoolean("system_framework_freeform_jump"));
 
+        // 配置确实读取成功后再同步早期媒体音量缓存；默认配置兜底时不能清除用户设置。
+        EarlyVolumeMediaSteps.syncAfterPrefsReady(
+            mPrefsMap.getBoolean("system_framework_volume_media_steps_enable"),
+            mPrefsMap.getInt("system_framework_volume_media_steps", 15)
+        );
+
         // 音量
         safeInit("VolumeDefaultStream", () -> initHook(new VolumeDefaultStream()));
         safeInit("VolumeFirstPress", () -> initHook(new VolumeFirstPress(), mPrefsMap.getBoolean("system_framework_volume_first_press")));
         safeInit("VolumeSeparateControl", () -> initHook(new VolumeSeparateControl(), mPrefsMap.getBoolean("system_framework_volume_separate_control")));
         safeInit("VolumeSteps", () -> initHook(new VolumeSteps(), mPrefsMap.getInt("system_framework_volume_steps", 0) > 0));
-        safeInit("VolumeMediaSteps", () -> initHook(new VolumeMediaSteps(), mPrefsMap.getBoolean("system_framework_volume_media_steps_enable")));
         safeInit("VolumeDisableSafe", () -> initHook(new VolumeDisableSafe(), mPrefsMap.getBoolean("system_framework_volume_disable_safe")));
         // initHook(new ClockShowSecond(), mPrefsMap.getBoolean("system_ui_statusbar_clock_show_second"));
 
