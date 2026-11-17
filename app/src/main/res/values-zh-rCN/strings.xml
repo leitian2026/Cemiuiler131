@@ -274,7 +274,7 @@
     <string name="system_framework_volume_disable_safe">移除高音量安全限制</string>
     <string name="system_framework_volume_separate_slider">通知音量滑块</string>
     <string name="system_framework_volume_media_steps">媒体音量阶数</string>
-    <string name="system_framework_volume_media_steps_desc">可能会导致音量条的滚动卡顿或蓝牙音量异常</string>
+    <string name="system_framework_volume_media_steps_desc">修改后需要重启两次：第一次写入系统早期启动缓存，第二次才会应用。可能会导致音量条滚动卡顿或蓝牙音量异常。</string>
     <string name="system_framework_volume_steps">音量级数倍增</string>
 
     <string name="system_ui_display_cutout_title">屏幕缺口</string>
