@@ -42,7 +42,8 @@
         android:dependency="prefs_key_system_framework_volume_media_steps_enable"
         android:defaultValue="15"
         app:defaultValueText="@string/array_default"
-        app:maxValue="29"
+        <!-- Keep in sync with EarlyVolumeMediaSteps.MAX_STEPS. -->
+        app:maxValue="40"
         app:minValue="15"
         app:stepValue="1"
         app:format="%s"
