@@ -279,7 +279,7 @@
     <string name="system_framework_volume_disable_safe">Remove high volume safety restrictions</string>
     <string name="system_framework_volume_separate_slider">Notification volume slider</string>
     <string name="system_framework_volume_media_steps">Media volume level</string>
-    <string name="system_framework_volume_media_steps_desc">It may cause the scrolling of the volume bar to freeze or the Bluetooth volume to be abnormal</string>
+    <string name="system_framework_volume_media_steps_desc">Requires two reboots: the first saves the setting for early system startup, and the second applies it. It may cause the volume slider to stutter or Bluetooth volume to behave abnormally.</string>
     <string name="system_framework_volume_steps">Volume level multiplier</string>
     <string name="system_ui_display_cutout_title">Display Cutout</string>
     <string name="system_ui_display_hide_cutout">Hide Display Cutout</string>
