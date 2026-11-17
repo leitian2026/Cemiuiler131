@@ -67,7 +67,13 @@ jobs:
             exit 1
           fi
           echo "APK_FILE=$APK_FILE" >> "$GITHUB_ENV"
-          echo "APK_FILE_NAME=$(basename "$APK_FILE" .apk)" >> "$GITHUB_ENV"
+          VERSION_NAME=$(sed -n 's/^[[:space:]]*versionName "\\([^"]*\\)".*/\\1/p' app/build.gradle | head -n 1)
+          if [ -z "$VERSION_NAME" ]; then
+            echo "::error::无法从 app/build.gradle 读取 versionName"
+            exit 1
+          fi
+          echo "APK_FILE=$APK_FILE" >> "$GITHUB_ENV"
+          echo "ARTIFACT_NAME=Cemiuiler131-fix-volume-media-steps-android12-$VERSION_NAME" >> "$GITHUB_ENV"
 
       - name: Show APKs SHA256
         if: success()
@@ -84,6 +90,6 @@ jobs:
       - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.APK_FILE_NAME }}
+          name: ${{ env.ARTIFACT_NAME }}
           path: ${{ env.APK_FILE }}
           compression-level: 9
