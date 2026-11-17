@@ -20,6 +20,9 @@ object EarlyVolumeMediaSteps {
     private const val TAG = "Cemiuiler-MediaSteps"
     private const val CACHE_PATH = "/data/system/cemiuiler_media_steps"
     private const val TEMP_PATH = "/data/system/.cemiuiler_media_steps.tmp"
+    private const val MIN_STEPS = 16
+    // Keep the matching app:maxValue in res/xml/framework_volume.xml in sync.
+    const val MAX_STEPS = 40
     private val installStarted = AtomicBoolean(false)
     private val statusReported = AtomicBoolean(false)
 
@@ -46,7 +49,7 @@ object EarlyVolumeMediaSteps {
                         val cache = File(CACHE_PATH)
                         if (!cache.isFile) return
                         val steps = cache.readText(Charsets.UTF_8).trim().toIntOrNull()
-                        if (steps == null || steps !in 16..29) {
+                        if (steps == null || steps !in MIN_STEPS..MAX_STEPS) {
                             XposedBridge.log("[$TAG][W]: invalid cached media steps; ignored")
                             return
                         }
@@ -80,7 +83,7 @@ object EarlyVolumeMediaSteps {
     fun syncAfterPrefsReady(enabled: Boolean, configuredSteps: Int) {
         if (!PrefsUtils.sConfigLoaded) return
 
-        val desired = if (enabled && configuredSteps in 16..29) configuredSteps else null
+        val desired = if (enabled && configuredSteps in MIN_STEPS..MAX_STEPS) configuredSteps else null
         val syncError = syncCache(desired)
 
         if (enabled && statusReported.compareAndSet(false, true)) {
